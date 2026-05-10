@@ -1,0 +1,92 @@
+Problem Tanımı
+Küçük ve orta ölçekli işletmeler (KOBİ'ler) ile kooperatifler, günlük operasyonlarını büyük ölçüde
+manuel yöntemlerle yürütmektedir. Müşteri talepleri e-posta, telefon veya mesajlaşma
+uygulamaları üzerinden karşılanmakta; sipariş ve stok takibi dağınık tablolara ya da kağıt bazlı
+sistemlere dayanmaktadır. Kargo süreçleri elle kontrol edilmekte, iş akışları ise kişiden kişiye
+farklılık göstermektedir.
+Bir işletme sahibi, günde ortalama 2-3 saatini yalnızca "siparişim nerede?" veya "bu ürün stokta
+var mı?" gibi soruları yanıtlamakla geçirebilmektedir. Stok tükenmesi fark edildiğinde iş işten
+geçmiş, müşteri kaybedilmiş olabilmektedir. Kargo gecikmeleri ise müşteriye ulaşmadan önce
+işletmeye ulaşmamaktadır.
+Bu yapı; operasyonel verimsizliklere, insan kaynaklı hatalara, tutarsız müşteri deneyimine ve
+ölçeklenme güçlüklerine zemin hazırlamaktadır. İşletmeler büyüdükçe bu sorunlar
+derinleşmekte, rekabet gücü ise giderek zayıflamaktadır.
+Bu hackathon'un amacı, söz konusu süreçleri yapay zeka destekli sistemlerle daha verimli,
+izlenebilir ve otomatik hale getiren çözümler geliştirmektir.
+Hedef Kitle
+Geliştirilen çözümler aşağıdaki gibi işletmeleri hedef almalıdır:
+● 20 ila 200 ürün yelpazesiyle çalışan küçük ölçekli e-ticaret işletmeleri
+● Günde 10 ila 100 arası sipariş işleyen butik veya bölgesel satış yapan firmalar
+● Tarım, gıda veya el sanatları alanında faaliyet gösteren üretici kooperatifleri
+● Fiziksel mağaza ile online satışı birlikte yürüten karma yapılar
+Yönlendirme
+Katılımcılardan aşağıdaki alanlardan bir veya birkaçını kapsayan çözümler geliştirmeleri
+beklenmektedir:
+1. Müşteri İletişiminin Otomasyonu
+Müşteri taleplerini doğal dil üzerinden anlayan, bağlama uygun yanıtlar üreten ve gerektiğinde
+ilgili sistemlerle etkileşime geçerek aksiyon alabilen yapılar.
+Örnek Senaryo: Bir müşteri WhatsApp üzerinden "128 numaralı siparişim ne zaman gelir?"
+diye soruyor. Sistem siparişi otomatik sorguluyor, kargo durumunu çekiyor ve müşteriye anlık
+bilgi veriyor — tüm bu süreç herhangi bir insan müdahalesi olmadan tamamlanıyor.
+2. Ürün ve Sipariş Takibi
+Ürün stok durumunu izleyen, siparişlerin anlık durumunu sunan ve geçmiş sipariş verilerine
+erişim sağlayan sistemler.
+Örnek Senaryo: İşletme yöneticisi sabah uyandığında yapay zeka destekli paneline bakıyor:
+dün gece gelen 12 siparişin durumu, hangi ürünlerin beklemede olduğu ve bugün teslim
+edilmesi gerekenler tek ekranda özetlenmiş şekilde karşısında duruyor.
+3. Kargo Süreçlerinin Yönetimi
+Kargo durumunu takip eden, teslimat süreçleri hakkında bilgi sunan ve olası gecikme ya da
+sorunları önceden tespit edebilen çözümler.
+Örnek Senaryo: Kargo firmasının sisteminde gecikme işareti çıkan siparişler otomatik olarak
+tespit ediliyor. Sistem hem müşteriyi bilgilendiriyor hem de işletme yöneticisine özet bir rapor
+iletiyor — müşteri şikayet etmeden önce işletme durumu biliyor.
+4. Stok ve Envanter Yönetimi
+Stok seviyelerini otomatik izleyen, kritik eşiklerde uyarı üreten ve yenileme süreçlerini
+kolaylaştıran sistemler.
+Örnek Senaryo: Bir tarım kooperatifinde domates stoğu 50 kg'ın altına düştüğünde sistem
+otomatik olarak devreye giriyor: yöneticiye bildirim gönderiyor, geçmiş satış verilerine bakarak
+ne kadar sipariş verilmesi gerektiğini öneriyor ve tedarikçiye taslak bir sipariş maili hazırlıyor.
+5. İş Akışı ve Görev Yönetimi
+Tekrarlayan operasyonel görevleri otomatikleştiren, ekip içi iş dağılımını düzenleyen ve süreçleri
+uçtan uca yönetebilen yapılar.
+Örnek Senaryo: Her gün sabah 08.00'de sistem o güne ait siparişleri analiz ediyor, depo
+sorumlusuna hazırlanması gereken paketlerin listesini, kargo görevlisine ise teslim rotasını
+otomatik olarak gönderiyor. Kimse kimseyi aramak zorunda kalmıyor.
+6. Analitik ve İçgörü Üretimi (Opsiyonel)
+Satış trendleri, stok öngörüleri ve operasyonel performans analizleri gibi veriye dayalı içgörüler
+sunan katmanlar.
+Örnek Senaryo: Sistem geçmiş 3 aylık satış verisini analiz ederek önümüzdeki hafta en çok
+satılması beklenen 5 ürünü tahmin ediyor ve stok yöneticisini önceden uyarıyor.
+Teknik Yaklaşım
+Katılımcılar çözüm geliştirme sürecinde teknik olarak serbesttir. Farklı arayüzler (mesajlaşma
+uygulamaları, e-posta sistemleri, web uygulamaları vb.) ve farklı teknoloji yığınları kullanılabilir.
+Geliştirilen çözümlerin merkezinde yapay zeka yer almalı; özellikle aşağıdaki yaklaşımlar teşvik
+edilmektedir:
+● Yapay zeka ajanları (agent-based sistemler)
+● Doğal dil işleme ve üretme yetkinlikleri
+● Veri ile etkileşim (RAG benzeri yaklaşımlar)
+● Harici sistemlerle entegrasyon ve aksiyon alma
+Beklentiler
+Katılımcıların projelerinde aşağıdaki yetkinlikleri göstermesi beklenmektedir:
+Yapay Zeka Kullanımı
+● Yapay zeka modellerinin etkin ve amaca uygun kullanımı
+● Agent mimarilerinin tasarlanması ve uygulanması
+Veri ile Çalışma
+● Ürün, sipariş ve müşteri verilerinin işlenmesi
+● Dinamik veri üzerinden anlamlı çıktı üretilmesi
+Aksiyon Alabilen Sistemler
+● Sadece bilgi sunan değil, işlem gerçekleştirebilen sistemler geliştirilmesi
+● Harici servislerle entegrasyon kurulması
+Otomasyon Seviyesi
+● İnsan müdahalesini azaltan çözümler geliştirilmesi
+● Süreçlerin mümkün olduğunca otomatik hale getirilmesi
+Kullanıcı Deneyimi
+● Anlaşılır ve akıcı bir kullanıcı etkileşimi sunulması
+● Gerçek kullanım senaryolarına uygunluk
+Beklenen Çıktı
+Her takımın:
+● Çalışır durumda bir prototip geliştirmesi
+● Sistem mimarisini açık şekilde sunması (README olarka githubda)
+● Kullanılan yapay zeka yaklaşımını açıklaması
+● Kısa ve etkili bir demo gerçekleştirmesi
+Beklenmektedir.
