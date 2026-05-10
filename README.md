@@ -100,7 +100,7 @@
 | Katman | Teknoloji |
 |--------|-----------|
 | AI Agent | LangGraph (StateGraph + ToolNode) |
-| LLM | Ollama (local) — Qwen3.6:27b / Gemma4:26b |
+| LLM | **Ollama** (local) / **OpenAI** / **Google Gemini** / **Anthropic Claude** |
 | Backend | FastAPI + Uvicorn |
 | Database | SQLite |
 | Auth | contextvars (async-safe per-request scope) |
@@ -108,6 +108,15 @@
 | Scheduler | APScheduler (AsyncIOScheduler) |
 | Telegram | python-telegram-bot (async) |
 | Config | Pydantic Settings + python-dotenv |
+
+### Desteklenen LLM Provider'lar
+
+| Provider | Model Örnekleri | API Key Gerekli | Local |
+|----------|----------------|-----------------|-------|
+| **Ollama** | Qwen3.6:27b, Gemma4:26b, Llama3 | ❌ Hayır | ✅ Tamamen offline |
+| **OpenAI** | gpt-4o, gpt-4o-mini, gpt-3.5-turbo | ✅ `OPENAI_API_KEY` | ❌ Cloud |
+| **Google Gemini** | gemini-2.0-flash, gemini-pro | ✅ `GOOGLE_API_KEY` | ❌ Cloud |
+| **Anthropic Claude** | claude-sonnet-4-20250514, claude-haiku | ✅ `ANTHROPIC_API_KEY` | ❌ Cloud |
 
 ---
 
@@ -143,15 +152,19 @@ Agent Yanıt: "2 numaralı siparişe erişim yetkim bulunmuyor,
 
 ### Gereksinimler
 - Python 3.11+
-- [Ollama](https://ollama.ai) yüklü ve çalışır durumda
-- Bir LLM modeli (örn: `ollama pull qwen3.6:27b`)
+- Aşağıdaki LLM seçeneklerinden **en az biri:**
+  - [Ollama](https://ollama.ai) (local, ücretsiz) + bir model (`ollama pull qwen3.6:27b`)
+  - OpenAI API Key
+  - Google Gemini API Key
+  - Anthropic Claude API Key
 
 ### Adımlar
 
 ```bash
 # 1. Repoyu klonla
-git clone https://github.com/<your-username>/kobi-asistan.git
-cd kobi-asistan
+git clone https://github.com/Serkan0YLDZ/YZTA_Hackathon.git
+cd YZTA_Hackathon
+git checkout ai-agent
 
 # 2. Virtual environment
 python -m venv venv
@@ -159,17 +172,48 @@ source venv/bin/activate  # Linux/Mac
 .\venv\Scripts\activate   # Windows
 
 # 3. Bağımlılıklar
-pip install langgraph langchain-ollama langchain-core
-pip install fastapi uvicorn pydantic-settings python-dotenv apscheduler python-telegram-bot
+pip install -r requirements.txt
 
 # 4. Ortam değişkenleri
 cp .env.example .env
-# .env dosyasını düzenle
+```
 
-# 5. Ollama'nın çalıştığından emin ol
-ollama serve
+### LLM Provider Seçimi
 
-# 6. Sunucuyu başlat
+`.env` dosyasında `LLM_PROVIDER` değişkenini ayarlayın:
+
+**Seçenek A: Ollama (Local — ücretsiz, internet gereksiz)**
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3.6:27b
+```
+> Ollama'nın çalıştığından emin olun: `ollama serve`
+
+**Seçenek B: OpenAI**
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+**Seçenek C: Google Gemini**
+```env
+LLM_PROVIDER=gemini
+GOOGLE_API_KEY=AIza...
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+**Seçenek D: Anthropic Claude**
+```env
+LLM_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_MODEL=claude-sonnet-4-20250514
+```
+
+### Sunucuyu Başlat
+
+```bash
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 

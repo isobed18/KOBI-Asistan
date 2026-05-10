@@ -1,10 +1,21 @@
-fastapi>=0.115.0
-uvicorn>=0.30.0
-pydantic>=2.8.0
-pydantic-settings>=2.4.0
-langgraph>=0.2.0
-langchain-ollama>=0.2.0
-langchain-core>=0.3.0
-apscheduler>=3.10.0
-python-dotenv>=1.0.0
+# Core
+fastapi>=0.115
+uvicorn>=0.34
+pydantic-settings>=2.0
+python-dotenv>=1.0
+
+# AI Agent
+langgraph>=0.4
+langchain-core>=0.3
+
+# LLM Providers (kullandiginiz provider'a gore yeterli)
+langchain-ollama>=0.3          # Ollama (local)
+langchain-openai>=0.3          # OpenAI
+langchain-google-genai>=2.0    # Google Gemini
+langchain-anthropic>=0.3       # Anthropic Claude
+
+# Scheduler
+apscheduler>=3.10
+
+# Telegram
 python-telegram-bot>=21.0
