@@ -235,6 +235,20 @@ tr:hover td { background: rgba(51,65,85,.3); }
 .btn-success:hover:not(:disabled)  { filter: brightness(1.1); }
 .btn-danger   { background: rgba(239,68,68,.15); color: #f87171; border-color: rgba(239,68,68,.3); }
 .btn-danger:hover:not(:disabled)   { background: rgba(239,68,68,.25); }
+.btn-logout {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.38);
+}
+.btn-logout:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.55);
+}
+.btn-logout:focus-visible {
+  outline: 2px solid rgba(239, 68, 68, 0.45);
+  outline-offset: 2px;
+}
 .btn-ghost    { background: transparent; color: var(--text2); border-color: var(--border); }
 .btn-ghost:hover:not(:disabled)    { background: var(--surface2); color: var(--text); }
 .btn-sm { padding: 4px 10px; font-size: 12px; }
@@ -540,20 +554,71 @@ select option { background: var(--surface); }
   align-items: center;
   gap: 8px;
 }
-.topbar-theme-btn {
-  font-size: 18px;
-  padding: 4px 8px;
-  line-height: 1;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color .15s ease, background .15s ease;
+}
+.theme-toggle:hover {
+  border-color: color-mix(in srgb, var(--border) 70%, var(--text3));
+}
+.theme-toggle-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 32px;
+  border-radius: 999px;
+  color: var(--text3);
+  pointer-events: none;
+  transition: color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.theme-toggle:hover .theme-toggle-slot:not(.active) {
+  color: var(--text2);
+}
+.theme-toggle-slot.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .topbar-user {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
   color: var(--text2);
 }
 .topbar-user-name {
   font-weight: 500;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-user .notif-bell-wrap {
+  flex-shrink: 0;
 }
 
 /* ============================================================
@@ -563,21 +628,45 @@ select option { background: var(--surface); }
   position: relative;
 }
 .notif-bell-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 36px;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 20px;
-  padding: 4px 8px;
-  border-radius: var(--radius);
+  padding: 6px 10px;
+  border-radius: 10px;
   position: relative;
   color: var(--text2);
-  transition: background .15s;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
 }
-.notif-bell-btn:hover { background: var(--surface2); }
-.notif-bell-btn.has-unread { color: var(--text); }
+.notif-bell-btn svg {
+  flex-shrink: 0;
+  opacity: .92;
+}
+.notif-bell-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.notif-bell-btn:hover svg {
+  opacity: 1;
+}
+.notif-bell-btn:active svg {
+  transform: scale(.94);
+}
+.notif-bell-btn.has-unread {
+  color: var(--text);
+}
+.notif-bell-btn.has-unread svg {
+  opacity: 1;
+  color: color-mix(in srgb, var(--accent) 35%, var(--text));
+}
 .notif-badge {
   position: absolute;
-  top: 0; right: 0;
+  top: 4px;
+  right: 2px;
   background: var(--danger);
   color: #fff;
   font-size: 9px;
