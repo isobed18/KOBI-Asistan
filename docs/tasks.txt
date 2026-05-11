@@ -1,0 +1,115 @@
+1. UX Vizyonu ve İstediğimiz Hissiyat
+İlk Giriş (Onboarding) Deneyimi:
+
+Kullanıcı (KOBİ sahibi) login yaptığı anda tam ekran yumuşak bir karşılama görmeli.
+Büyük yazı ile “Hoş geldiniz, Ahmet Bey” + işletme adı.
+Kısa animasyonlu loading sonrası Guided Overview başlar (4-5 adım, Next butonuyla ilerleyen wizard tarzı).
+Her adımda:
+Bugünkü satış/ciro özeti
+Hazırlanması gereken siparişler
+Riskli / Onay bekleyen işler
+AI Önerilen Aksiyonlar
+
+Bu akış bittikten sonra “Tam Dashboard’a Geç” butonu çıkar.
+
+Genel Dashboard Hissiyatı (Onboarding sonrası):
+
+Çok sade, bol whitespace, minimal element.
+ChatGPT / Linear.app tarzı temiz, modern, koyu gri + yumuşak yeşil accent renkler.
+Her sayfada çok az bilgi gösterilsin, ama en önemlileri büyük ve net.
+Veri olmayan alanlarda (boş state’ler) rahatlatıcı illüstrasyonlar veya “Henüz bir şey yok, sistem çalışıyor” mesajları.
+Genel his: Sakin, güven veren, proaktif, “her şey kontrol altında” duygusu. Stres azaltıcı, karmaşık yönetim paneli gibi değil; akıllı bir asistan gibi hissettirmeli.
+
+Kullanıcı her girdiğinde “İşlerim büyük ölçüde otomatik yürüyor, ben sadece kritik noktalara bakıyorum” hissini almalı.
+
+2. Projenin Güçlü Yönü (Differentiation)
+En iyi yapmamız gereken yön:
+“Proaktif + Tam Otomatik Müşteri İletişimi + Operasyonel Akıl” kombinasyonu.
+
+Shopier, Trendyol, WooCommerce gibi araçlar stok, sipariş, kargo yönetebiliyor.
+Bizim farkımız: Müşteriyle 7/24 doğal dilde konuşan, proaktif olarak sorunları tespit edip yöneticiye sadece karar vereceği noktaları sunan bir sistem olmak.
+
+Strateji:
+Sales Agent reposunun multi-tenant + tenant-specific personality + channel adapter güçlü yanlarını çok iyi geliştirerek en iyi müşteri iletişim + proaktif operasyon platformu olacağız.
+
+3. Sales Agent Reposundan Alınacak / Geliştirilecekler
+
+YAML tabanlı tenant config (personality, rules, branding, enabled features)
+Channel Adapter pattern (Telegram → WhatsApp kolay geçiş)
+Tenant-aware state ve prompt yönetimi
+Graph runtime config ile tenant bazlı davranış
+Repository pattern
+
+Bunların üzerine bizim ekleyeceğimiz güçlü katmanlar:
+
+Güçlü Prompt Police + Intent Classifier
+OTP’li kritik aksiyon güvenliği
+Guided Dashboard + AI Task Bar
+Scheduler tabanlı proaktif bilet/ticket sistemi
+
+
+4. Adım Adım Task Listesi (Öncelik Sırasıyla)
+
+PHASES
+Phase 1: Backend Temel Güçlendirme (Şimdi Yapılacaklar)
+
+Tenant Config Loader’ı Tamamla
+tenants/default/config.yaml yapısını aktif hale getir. Agent personality, rules, llm settings ve feature flag’leri buradan oku.
+Agent Graph’ını Tenant-Aware Yap
+agent/graph.py ve agent/state.py dosyalarını sales-agent reposundan ilham alarak tenant_id, personality ve rules’ı dinamik alacak şekilde güncelle.
+Intent Classifier’ı Güçlendir
+Regex + embedding similarity (sentence-transformers) ile %80+ basit sorguyu LLM’siz hallet.
+Admin Tools’u İyileştir
+Fuzzy search ile stok güncelleme (admin_stok_guncelle)
+Her stok değişikliğinde stock_movements tablosuna otomatik log
+Toplu stok güncelleme tool’u
+
+OTP Doğrulama Sistemini Kur
+Kritik aksiyonlar (sipariş iptali, büyük stok düşümü, indirim onayı) için Telegram OTP + doğrulama akışı.
+Ticket + Bildirim Sistemini Tamamla
+Yeni ticket oluştuğunda yöneticiye hem Dashboard hem Telegram bildirimi
+Deduplication (aynı uyarıyı tekrar gönderme)
+
+Sipariş Tamamlanma Event’i
+Sipariş durumu “Tamamlandı” olduğunda otomatik stok düş + movement log.
+Repository Pattern Temizliği
+repositories/ klasörü oluştur ve mevcut CRUD işlemlerini buraya taşı (orders, products, tickets).
+Scheduler Job’larını İyileştir
+Sabah raporu (LLM + actionable tasks JSON)
+Kritik stok taraması
+Kargo gecikme taraması
+
+
+
+Phase 2: AI + Otomasyon İyileştirmeleri
+
+AI Suggested Tasks (Action Bar)
+LLM’den JSON formatında önerilen aksiyonlar al (onayla/reddet/erteleye basılabilir).
+Admin AI Assistant’ı Güçlendir
+Dashboard içinden doğal dil ile “Ceviz içi stok ekle”, “Bugünkü raporu özetle” gibi komutlar çalışsın.
+LLM Kullanım Optimizasyonunu Bitir
+Cache, template’ler ve intent classifier’ı production seviyesine çıkar.
+
+
+Phase 3: UX / UI (Frontend)
+
+Guided Overview Akışını Tasarla ve Implemente Et
+İlk girişte 4-5 adımlık wizard (Hoş geldiniz → Günlük özet → Hazırlanacak siparişler → Onay bekleyenler → AI Aksiyonlar).
+Genel Dashboard Tasarımını Yenile
+Minimal, bol whitespace, sakin renk paleti
+Dark mode varsayılan
+Framer Motion ile smooth geçişler
+Boş state’lerde rahatlatıcı tasarımlar
+
+AI Task Bar’ı Dashboard’a Entegre Et
+JSON’dan gelen önerileri kart olarak göster, aksiyon butonları ile.
+Diğer Sayfaları Sadeleştir
+Sipariş, Stok, Kargo, Ticket sayfalarını daha az bilgi, daha büyük ve net elementlerle yeniden düzenle.
+
+
+Phase 4: Hackathon’a Hazırlık (Son Dokunuşlar)
+
+Demo Senaryolarını Hazırla (README’ye eklenecek)
+Multi-Tenant Hazırlığını Bitir (UI’da tenant switch hazır olsun)
+Rapor Export (PDF)
+Son testler ve polish
