@@ -10,6 +10,7 @@ import time
 import hashlib
 from dataclasses import dataclass, field
 from typing import Optional
+from difflib import SequenceMatcher
 
 from tools.order_product_tools import (
     siparis_sorgula,
@@ -80,6 +81,70 @@ INTENTS = {
         r"siparişimi\s+iptal",
     ],
 }
+
+SEMANTIC_EXAMPLES = {
+    "siparis_sorgula": [
+        "siparisim nerede",
+        "siparis durumunu ogrenmek istiyorum",
+        "order status",
+    ],
+    "stok_sorgu": [
+        "bu urunden var mi",
+        "stokta kac tane var",
+        "urun fiyati nedir",
+    ],
+    "kritik_stok": [
+        "azalan urunleri goster",
+        "hangi urunler bitmek uzere",
+    ],
+    "gunluk_ozet": [
+        "bugun isler nasil",
+        "gunluk durum nedir",
+    ],
+    "kargo_takip": [
+        "kargom nerede",
+        "teslimat ne zaman",
+    ],
+    "iptal_talebi": [
+        "siparisi iptal etmek istiyorum",
+        "vazgectim iptal olsun",
+    ],
+}
+
+_embedding_model = None
+_example_embeddings = None
+
+
+def _semantic_intent(text: str) -> tuple[str, float] | None:
+    """Optional sentence-transformers similarity; difflib fallback is zero-dep."""
+    global _embedding_model, _example_embeddings
+    try:
+        if _embedding_model is None:
+            from sentence_transformers import SentenceTransformer
+
+            _embedding_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            flat = [(intent, phrase) for intent, phrases in SEMANTIC_EXAMPLES.items() for phrase in phrases]
+            _example_embeddings = (
+                flat,
+                _embedding_model.encode([phrase for _, phrase in flat], normalize_embeddings=True),
+            )
+        flat, embeddings = _example_embeddings
+        query_emb = _embedding_model.encode([text], normalize_embeddings=True)[0]
+        scores = embeddings @ query_emb
+        best_idx = int(scores.argmax())
+        best_score = float(scores[best_idx])
+        if best_score >= 0.68:
+            return flat[best_idx][0], best_score
+    except Exception:
+        best_intent, best_score = None, 0.0
+        for intent, phrases in SEMANTIC_EXAMPLES.items():
+            for phrase in phrases:
+                score = SequenceMatcher(None, text.lower(), phrase.lower()).ratio()
+                if score > best_score:
+                    best_intent, best_score = intent, score
+        if best_intent and best_score >= 0.72:
+            return best_intent, best_score
+    return None
 
 # ---------------------------------------------------------------------------
 # Response Cache
@@ -201,6 +266,24 @@ def classify(text: str) -> IntentResult:
                     confidence=0.9,
                     bypass_llm=bypass,
                 )
+
+    semantic = _semantic_intent(text)
+    if semantic:
+        intent, score = semantic
+        params = {}
+        if intent == "stok_sorgu":
+            params["urun_adi"] = _extract_product_name(text) or text
+        elif intent in ("siparis_sorgula", "kargo_takip", "iptal_talebi"):
+            params = _extract_order_ref(text)
+        scope = get_active_scope()
+        bypass = intent in ("kritik_stok", "gunluk_ozet")
+        if intent == "stok_sorgu":
+            bypass = bool(params.get("urun_adi"))
+        if intent == "siparis_sorgula":
+            bypass = bool(params)
+        if intent == "musteri_siparisleri":
+            bypass = bool(scope.get("telefon") or scope.get("takip_kodu"))
+        return IntentResult(intent=intent, params=params, confidence=score, bypass_llm=bypass)
 
     return IntentResult(intent="genel", confidence=0.0, bypass_llm=False)
 

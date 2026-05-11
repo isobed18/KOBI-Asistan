@@ -117,15 +117,6 @@ def init_db():
         )
     """)
 
-    # Hafif migration: eski SQLite dosyalarinda yeni kolonlar eksikse ekle.
-    def ensure_column(table: str, column: str, ddl: str):
-        cols = [r["name"] for r in cursor.execute(f"PRAGMA table_info({table})").fetchall()]
-        if column not in cols:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
-
-    for table in ("products", "orders", "tickets", "users", "stock_movements"):
-        ensure_column(table, "tenant_id", "INTEGER NOT NULL DEFAULT 1")
-
     # KULLANICILAR (admin / kobi)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -140,6 +131,33 @@ def init_db():
             last_login   TEXT
         )
     """)
+
+    # OTP CHALLENGES (kritik musteri aksiyonlari)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS otp_challenges (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id       INTEGER NOT NULL DEFAULT 1,
+            order_id        INTEGER NOT NULL,
+            action          TEXT NOT NULL,
+            channel         TEXT,
+            channel_user_id TEXT,
+            code_hash       TEXT NOT NULL,
+            attempts        INTEGER NOT NULL DEFAULT 0,
+            max_attempts    INTEGER NOT NULL DEFAULT 5,
+            expires_at      TEXT NOT NULL,
+            verified_at     TEXT,
+            created_at      TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+
+    # Hafif migration: eski SQLite dosyalarinda yeni kolonlar eksikse ekle.
+    def ensure_column(table: str, column: str, ddl: str):
+        cols = [r["name"] for r in cursor.execute(f"PRAGMA table_info({table})").fetchall()]
+        if column not in cols:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+    for table in ("products", "orders", "tickets", "users", "stock_movements", "otp_challenges"):
+        ensure_column(table, "tenant_id", "INTEGER NOT NULL DEFAULT 1")
 
     conn.commit()
     conn.close()

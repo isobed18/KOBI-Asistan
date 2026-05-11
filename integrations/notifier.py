@@ -86,6 +86,26 @@ def _fire_telegram(message: str):
         asyncio.run(_send_telegram(message))
 
 
+def send_customer_telegram_message(chat_id: str, message: str):
+    """Tekil musteri Telegram chat'ine mesaj gonderir."""
+    async def _send():
+        try:
+            from config import settings
+            if not settings.TELEGRAM_ENABLED or not settings.TELEGRAM_BOT_TOKEN:
+                return
+            from telegram import Bot
+            bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+            await bot.send_message(chat_id=chat_id, text=message)
+        except Exception as e:
+            logger.warning(f"Customer Telegram message failed: {e}")
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_send())
+    except RuntimeError:
+        asyncio.run(_send())
+
+
 # ---------------------------------------------------------------------------
 # Yüksek seviyeli bildirim fonksiyonları
 # ---------------------------------------------------------------------------

@@ -12,6 +12,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from langchain_core.tools import tool
 from database.db import get_connection
 from agent.auth import get_active_scope, check_order_access, get_customer_orders_filter
+from agent.tenant_context import get_tenant_id
+from agent.otp import create_otp_challenge, verify_otp_challenge
+from repositories.products import search_products
+from repositories.tickets import create_ticket as repo_create_ticket
 
 
 @tool
@@ -129,16 +133,7 @@ def urun_stok_kontrol(urun_adi: str) -> dict:
     """Urun adina gore stok durumunu, fiyatini ve mevcut adedini kontrol eder.
     Musteri 'bu urun var mi?' veya 'fiyati ne?' dediginde bu tool kullanilir."""
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    rows = cursor.execute("""
-        SELECT id, name, category, price, stock_quantity, low_stock_threshold
-        FROM products
-        WHERE name LIKE ? AND is_active = 1
-    """, (f"%{urun_adi}%",)).fetchall()
-
-    conn.close()
+    rows = search_products(urun_adi, tenant_id=int(get_tenant_id() or 1), threshold=0.25, limit=8)
 
     if not rows:
         return {"sonuc": "bulunamadi", "mesaj": f"'{urun_adi}' adinda urun bulunamadi."}
@@ -157,6 +152,94 @@ def urun_stok_kontrol(urun_adi: str) -> dict:
         })
 
     return {"sonuc": "bulundu", "urunler": urunler}
+
+
+@tool
+def siparis_iptal_otp_gonder(siparis_no: int) -> dict:
+    """Siparis iptali gibi kritik aksiyonlar icin OTP baslatir.
+
+    Musteri once telefon/takip kodu ile yetkilendirilmis olmalidir. Bu tool
+    sadece OTP uretir ve mumkunse aktif Telegram kanalina gonderir. OTP
+    dogrulanmadan cancellation_request bileti acilmaz.
+    """
+    conn = get_connection()
+    order = conn.execute(
+        "SELECT * FROM orders WHERE id = ? AND tenant_id = ?",
+        (siparis_no, int(get_tenant_id() or 1)),
+    ).fetchone()
+    conn.close()
+    if not order:
+        return {"hata": f"Siparis #{siparis_no} bulunamadi."}
+
+    allowed, reason = check_order_access(dict(order))
+    if not allowed:
+        return {"hata": reason}
+
+    try:
+        from agent.state_runtime import get_channel_context
+        channel, channel_user_id = get_channel_context()
+    except Exception:
+        channel, channel_user_id = None, None
+
+    challenge = create_otp_challenge(
+        order_id=siparis_no,
+        action="cancel_order",
+        channel=channel,
+        channel_user_id=channel_user_id,
+        tenant_id=int(get_tenant_id() or 1),
+    )
+
+    sent = False
+    if channel == "telegram" and channel_user_id:
+        try:
+            from integrations.notifier import send_customer_telegram_message
+
+            send_customer_telegram_message(
+                channel_user_id,
+                f"Siparis #{siparis_no} iptal dogrulama kodunuz: {challenge['code']}. Kod 10 dakika gecerlidir.",
+            )
+            sent = True
+        except Exception:
+            sent = False
+
+    return {
+        "basari": True,
+        "siparis_no": siparis_no,
+        "otp_gonderildi": sent,
+        "kanal": channel,
+        "mesaj": "Iptal icin 6 haneli OTP kodu gerekli. Kodu paylastiktan sonra iptal talebi insan incelemesine acilir.",
+        "debug_otp": challenge["code"] if not sent else None,
+    }
+
+
+@tool
+def siparis_iptal_otp_dogrula_ve_bilet_ac(siparis_no: int, otp_kodu: str, iptal_nedeni: str = "") -> dict:
+    """OTP dogrulandiysa siparis iptal talebi icin human-review ticket acar."""
+    verified = verify_otp_challenge(
+        order_id=siparis_no,
+        action="cancel_order",
+        code=otp_kodu,
+        tenant_id=int(get_tenant_id() or 1),
+    )
+    if not verified.get("ok"):
+        return verified
+
+    ticket_id = repo_create_ticket(
+        {
+            "type": "cancellation_request",
+            "title": f"Siparis #{siparis_no} iptal talebi",
+            "description": iptal_nedeni or "Musteri OTP ile dogrulanmis iptal talebi olusturdu.",
+            "priority": "high",
+            "related_order_id": siparis_no,
+        },
+        tenant_id=int(get_tenant_id() or 1),
+        dedupe_key={"type": "cancellation_request", "related_order_id": siparis_no},
+    )
+    return {
+        "basari": True,
+        "bilet_id": ticket_id,
+        "mesaj": f"OTP dogrulandi. Iptal talebiniz #{ticket_id} numarali bilet olarak insan incelemesine alindi.",
+    }
 
 
 @tool
@@ -198,22 +281,22 @@ def create_ticket(
     type değerleri: cancellation_request | complaint | refund_request | other
     priority değerleri: low | normal | high | critical"""
 
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO tickets (type, title, description, priority, related_order_id)
-        VALUES (?,?,?,?,?)
-    """, (type, title, description, priority, related_order_id))
-    ticket_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    if type == "cancellation_request":
+        return {
+            "hata": "Siparis iptali icin once siparis_iptal_otp_gonder, sonra siparis_iptal_otp_dogrula_ve_bilet_ac tool'u kullanilmalidir.",
+            "otp_gerekli": True,
+        }
 
-    # Admin bildirimi
-    try:
-        from integrations.notifier import notify_new_ticket
-        notify_new_ticket(ticket_id, title, priority, type, description)
-    except Exception:
-        pass
+    ticket_id = repo_create_ticket(
+        {
+            "type": type,
+            "title": title,
+            "description": description,
+            "priority": priority,
+            "related_order_id": related_order_id,
+        },
+        tenant_id=int(get_tenant_id() or 1),
+    )
 
     return {
         "bilet_id": ticket_id,
