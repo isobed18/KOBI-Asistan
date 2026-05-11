@@ -18,6 +18,9 @@ def seed():
     if cursor.execute("SELECT COUNT(*) FROM products").fetchone()[0] > 0:
         print("[SKIP] Veri zaten mevcut, seed atlandi.")
         conn.close()
+        from database.enrich_demo_history import maybe_enrich_demo_chart_data
+
+        print(maybe_enrich_demo_chart_data())
         return
 
     # URUNLER
@@ -82,6 +85,10 @@ def seed():
     conn.close()
     print("[OK] Demo verisi eklendi!")
     print("   - 8 urun, 6 siparis (tracking code'lu), 3 kargo kaydi")
+
+    from database.enrich_demo_history import maybe_enrich_demo_chart_data
+
+    print(maybe_enrich_demo_chart_data())
 
 
 if __name__ == "__main__":

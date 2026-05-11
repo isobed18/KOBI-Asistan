@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getCargoDashboard, createTicketManual } from '../api.js'
+import SortableTh from '../components/SortableTh.jsx'
+import { cmpBool, cmpNullableStr, cmpNum, cmpTime } from '../utils/tableSort.js'
 
 function fmtDate(s) {
   return s ? new Date(s).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -17,6 +19,16 @@ export default function Cargo() {
   const [error, setError]       = useState(null)
   const [ticketMsg, setTicketMsg] = useState({})
   const [tab, setTab]           = useState('all')
+  const [sortKey, setSortKey]   = useState('order_id')
+  const [sortDir, setSortDir]   = useState('asc')
+
+  const onSort = (key) => {
+    if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   const load = () => {
     setLoading(true)
@@ -44,13 +56,55 @@ export default function Cargo() {
     }
   }
 
-  if (error) return <div className="error-msg">⚠️ {error}</div>
-  if (!data)  return <div className="spinner" />
+  const all     = data?.shipments ?? []
+  const delayed = all.filter(s => s.is_delayed)
+  const active  = all.filter(s => !s.is_delayed)
+  const shown   = tab === 'delayed' ? delayed : tab === 'active' ? active : all
 
-  const all      = data.shipments
-  const delayed  = all.filter(s => s.is_delayed)
-  const active   = all.filter(s => !s.is_delayed)
-  const shown    = tab === 'delayed' ? delayed : tab === 'active' ? active : all
+  const sorted = useMemo(() => {
+    const rows = [...shown]
+    const mult = sortDir === 'asc' ? 1 : -1
+    rows.sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'order_id':
+          cmp = cmpNum(a.order_id, b.order_id)
+          break
+        case 'customer_name':
+          cmp = cmpNullableStr(a.customer_name, b.customer_name)
+          break
+        case 'cargo_tracking_code':
+          cmp = cmpNullableStr(a.cargo_tracking_code, b.cargo_tracking_code)
+          break
+        case 'cargo_company':
+          cmp = cmpNullableStr(a.cargo_company, b.cargo_company)
+          break
+        case 'cargo_status':
+          cmp = cmpNullableStr(a.cargo_status, b.cargo_status)
+          break
+        case 'estimated_delivery': {
+          const ta = a?.estimated_delivery ? Date.parse(a.estimated_delivery) : NaN
+          const tb = b?.estimated_delivery ? Date.parse(b.estimated_delivery) : NaN
+          if (Number.isFinite(ta) && Number.isFinite(tb)) cmp = ta - tb
+          else cmp = cmpNullableStr(a.estimated_delivery, b.estimated_delivery)
+          break
+        }
+        case 'cargo_last_update':
+          cmp = cmpTime(a.cargo_last_update, b.cargo_last_update)
+          break
+        case 'is_delayed':
+          cmp = cmpBool(a.is_delayed, b.is_delayed)
+          break
+        default:
+          cmp = cmpNum(a.order_id, b.order_id)
+      }
+      return mult * cmp
+    })
+    return rows
+  }, [shown, sortKey, sortDir])
+
+  if (error) return <div className="error-msg">⚠️ {error}</div>
+  if (!data) return <div className="spinner" />
 
   return (
     <>
@@ -96,7 +150,7 @@ export default function Cargo() {
 
         {loading ? (
           <div className="spinner" />
-        ) : shown.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">🚚</div>
             {tab === 'delayed' ? 'Gecikmeli kargo yok' : 'Kargoda sipariş yok'}
@@ -106,19 +160,19 @@ export default function Cargo() {
             <table>
               <thead>
                 <tr>
-                  <th>Sipariş</th>
-                  <th>Müşteri</th>
-                  <th>Kargo Kodu</th>
-                  <th>Firma</th>
-                  <th>Kargo Durumu</th>
-                  <th>Tahmini Teslimat</th>
-                  <th>Son Güncelleme</th>
-                  <th>Durum</th>
-                  <th></th>
+                  <SortableTh columnKey="order_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Sipariş</SortableTh>
+                  <SortableTh columnKey="customer_name" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Müşteri</SortableTh>
+                  <SortableTh columnKey="cargo_tracking_code" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Kargo Kodu</SortableTh>
+                  <SortableTh columnKey="cargo_company" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Firma</SortableTh>
+                  <SortableTh columnKey="cargo_status" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Kargo Durumu</SortableTh>
+                  <SortableTh columnKey="estimated_delivery" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Tahmini Teslimat</SortableTh>
+                  <SortableTh columnKey="cargo_last_update" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Son Güncelleme</SortableTh>
+                  <SortableTh columnKey="is_delayed" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Durum</SortableTh>
+                  <th aria-label="İşlemler" />
                 </tr>
               </thead>
               <tbody>
-                {shown.map(s => (
+                {sorted.map(s => (
                   <tr key={s.order_id} style={s.is_delayed ? { background: 'rgba(239,68,68,.04)' } : {}}>
                     <td style={{ fontFamily: 'monospace', color: 'var(--text2)' }}>#{s.order_id}</td>
                     <td style={{ fontWeight: 500 }}>{s.customer_name}</td>

@@ -24,6 +24,15 @@ class StockUpdateRequest(BaseModel):
     quantity_change: int        # pozitif = ekle, negatif = azalt
     reason: Optional[str] = None
 
+
+class ProductPatch(BaseModel):
+    """Kısmi ürün güncellemesi (tablo üzerinden düzenleme)."""
+    name: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[float] = None
+    stock_quantity: Optional[int] = None
+    low_stock_threshold: Optional[int] = None
+
 #  SİPARİŞ 
 
 class OrderItemResponse(BaseModel):
@@ -98,7 +107,11 @@ class TicketResponse(BaseModel):
 
 class ReportResponse(BaseModel):
     id: int
+    tenant_id: Optional[int] = None
     date: str
     report_text: str
-    raw_data: Optional[str]
+    raw_data: Optional[str] = None
+    briefing_json: Optional[str] = None
+    model_version: Optional[str] = None
+    source: Optional[str] = None
     created_at: str

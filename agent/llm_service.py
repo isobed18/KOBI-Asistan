@@ -16,6 +16,23 @@ from langchain_core.messages import HumanMessage
 from config import settings
 
 
+def _llm_connectivity_hint(exc: Exception) -> str:
+    """Connection refused gibi hatalarda yanlış provider (ör. Ollama kapalı) ipucu."""
+    msg = str(exc).lower()
+    errno = getattr(exc, "errno", None)
+    if errno != 61 and "connection refused" not in msg and "failed to establish" not in msg:
+        return ""
+    prov = getattr(settings, "LLM_PROVIDER", "ollama").lower()
+    if prov == "ollama":
+        return (
+            "\n\n---\n**İpucu:** `LLM_PROVIDER` şu an **ollama**; istek `OLLAMA_BASE_URL` "
+            "(varsayılan `http://localhost:11434`) adresine gidiyor. Ollama kapalıysa bu hata oluşur. "
+            "Google Gemini kullanacaksanız `.env` içinde `LLM_PROVIDER=gemini` ve `GOOGLE_API_KEY` "
+            "(veya `GEMINI_API_KEY`) tanımlayın, ardından API sunucusunu yeniden başlatın."
+        )
+    return ""
+
+
 def _create_llm(temperature: float = 0.3):
     """Provider-bağımsız LLM factory. LLM_PROVIDER env değişkeniyle kontrol edilir."""
     provider = getattr(settings, "LLM_PROVIDER", "ollama").lower()
@@ -112,7 +129,8 @@ Raporu Türkçe ve samimi bir yönetici diliyle yaz. Markdown kullan."""
         response = llm.invoke([HumanMessage(content=prompt)])
         return response.content
     except Exception as e:
-        return f"## Rapor Üretim Hatası\n\nLLM servisi yanıt vermedi: {e}\n\nHam veri:\n```json\n{json.dumps(raw_data, ensure_ascii=False, indent=2)}\n```"
+        hint = _llm_connectivity_hint(e)
+        return f"## Rapor Üretim Hatası\n\nLLM servisi yanıt vermedi: {e}{hint}\n\nHam veri:\n```json\n{json.dumps(raw_data, ensure_ascii=False, indent=2)}\n```"
 
 
 async def agenerate_daily_report(raw_data: dict) -> str:
@@ -141,7 +159,8 @@ Raporu Türkçe ve samimi bir yönetici diliyle yaz. Markdown kullan."""
         response = await llm.ainvoke([HumanMessage(content=prompt)])
         return response.content
     except Exception as e:
-        return f"## Rapor Üretim Hatası\n\nLLM servisi yanıt vermedi: {e}"
+        hint = _llm_connectivity_hint(e)
+        return f"## Rapor Üretim Hatası\n\nLLM servisi yanıt vermedi: {e}{hint}"
 
 
 # ---------------------------------------------------------------------------

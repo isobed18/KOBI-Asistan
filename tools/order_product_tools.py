@@ -243,9 +243,11 @@ def siparis_iptal_otp_dogrula_ve_bilet_ac(siparis_no: int, otp_kodu: str, iptal_
 
 
 @tool
-def kritik_stok_listesi() -> dict:
+def kritik_stok_listesi(tenant_id: int | None = None) -> dict:
     """Stok seviyesi kritik esigin altina dusmus tum urunleri listeler.
     Yonetici stok durumu sordugunda veya uyari gerektiginde kullanilir."""
+
+    tid = int(tenant_id) if tenant_id is not None else int(get_tenant_id() or 1)
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -253,16 +255,17 @@ def kritik_stok_listesi() -> dict:
     rows = cursor.execute("""
         SELECT id, name, category, stock_quantity, low_stock_threshold
         FROM products
-        WHERE stock_quantity <= low_stock_threshold AND is_active = 1
+        WHERE stock_quantity <= low_stock_threshold AND is_active = 1 AND tenant_id = ?
         ORDER BY stock_quantity ASC
-    """).fetchall()
+    """, (tid,)).fetchall()
 
     conn.close()
 
     if not rows:
-        return {"mesaj": "Tum urunler yeterli stok seviyesinde.", "urunler": []}
+        return {"tenant_id": tid, "mesaj": "Tum urunler yeterli stok seviyesinde.", "urunler": []}
 
     return {
+        "tenant_id": tid,
         "mesaj": f"{len(rows)} urun kritik stok seviyesinde!",
         "urunler": [dict(r) for r in rows]
     }
@@ -307,14 +310,18 @@ def create_ticket(
 
 
 @tool
-def gunluk_ozet() -> dict:
+def gunluk_ozet(tenant_id: int | None = None) -> dict:
     """Gunluk siparis durumu, gelir ve kritik stok ozetini getirir.
     Yonetici 'bugunku durum nedir?' dediginde bu tool kullanilir."""
+
+    tid = int(tenant_id) if tenant_id is not None else int(get_tenant_id() or 1)
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    siparisler = cursor.execute("SELECT status, total_price FROM orders").fetchall()
+    siparisler = cursor.execute(
+        "SELECT status, total_price FROM orders WHERE tenant_id = ?", (tid,)
+    ).fetchall()
     by_status = {}
     gelir = 0.0
     for s in siparisler:
@@ -324,12 +331,13 @@ def gunluk_ozet() -> dict:
 
     kritik = cursor.execute("""
         SELECT name, stock_quantity FROM products
-        WHERE stock_quantity <= low_stock_threshold AND is_active = 1
-    """).fetchall()
+        WHERE stock_quantity <= low_stock_threshold AND is_active = 1 AND tenant_id = ?
+    """, (tid,)).fetchall()
 
     conn.close()
 
     return {
+        "tenant_id": tid,
         "toplam_siparis": len(siparisler),
         "durum_dagilimi": by_status,
         "toplam_gelir": gelir,

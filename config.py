@@ -1,8 +1,13 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
+
     # Ollama (default provider)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen3.6:27b"
@@ -18,8 +23,11 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
 
-    # Gemini
-    GEMINI_API_KEY: str = ""
+    # Gemini (.env'de GOOGLE_API_KEY veya GEMINI_API_KEY kullanılabilir)
+    GEMINI_API_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY", "google_api_key"),
+    )
     GEMINI_MODEL: str = "gemini-1.5-flash"
 
     # Telegram
@@ -34,9 +42,6 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "kobi-super-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 8   # 8 saat
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()

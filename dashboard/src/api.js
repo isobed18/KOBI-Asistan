@@ -37,8 +37,14 @@ export const getProducts = (params = {}) => {
   const q = new URLSearchParams(params).toString()
   return req(`/products/${q ? '?' + q : ''}`)
 }
+export const createProduct = (body) =>
+  req('/products/', { method: 'POST', body: JSON.stringify(body) })
 export const updateStock = (id, body) =>
   req(`/products/${id}/stock`, { method: 'PATCH', body: JSON.stringify(body) })
+export const patchProduct = (id, body) =>
+  req(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteProduct = (id) =>
+  req(`/products/${id}`, { method: 'DELETE' })
 export const getStockMovements = (id, limit = 50) =>
   req(`/products/${id}/movements?limit=${limit}`)
 
@@ -72,6 +78,7 @@ export const markNotificationRead = (id) =>
   req(`/api/v1/notifications/${id}/read`, { method: 'POST' })
 
 // Dashboard extras
-export const getSalesChart  = () => req('/dashboard/sales-chart')
+export const getSalesChart = (days = 14) =>
+  req(`/dashboard/sales-chart?days=${encodeURIComponent(days)}`)
 export const generateAiTasks = () => req('/dashboard/ai-tasks', { method: 'POST' })
 export const getAnalytics = () => req('/dashboard/analytics')

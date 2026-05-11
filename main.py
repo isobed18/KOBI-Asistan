@@ -19,6 +19,7 @@ from routers.admin_chat import router as admin_chat_router
 from routers.auth_router import router as auth_router
 from integrations.telegram_bot import setup_telegram, stop_telegram
 from agent.scheduler import setup_scheduler, stop_scheduler
+from config import settings
 
 
 @asynccontextmanager
@@ -27,6 +28,10 @@ async def lifespan(app: FastAPI):
     init_db()
     seed()
     seed_users()
+    print(
+        f"[CONFIG] LLM_PROVIDER={settings.LLM_PROVIDER!r} "
+        "(kabuktaki ortam degiskeni .env dosyasini ezer)"
+    )
     print("[START] KOBI Asistan API baslatiliyor...")
     setup_scheduler()
     await setup_telegram()

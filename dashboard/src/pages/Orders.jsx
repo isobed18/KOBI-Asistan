@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getOrders, updateOrderStatus } from '../api.js'
 import StatusBadge, { ORDER_STATUS } from '../components/StatusBadge.jsx'
+import SortableTh from '../components/SortableTh.jsx'
+import { cmpNullableStr, cmpNum, cmpTime } from '../utils/tableSort.js'
 
 const STATUSES = ['', 'hazırlanıyor', 'kargoda', 'teslim_edildi', 'iptal']
 
@@ -130,6 +132,16 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch]       = useState('')
   const [selected, setSelected]   = useState(null)
+  const [sortKey, setSortKey]     = useState('id')
+  const [sortDir, setSortDir]     = useState('asc')
+
+  const onSort = (key) => {
+    if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   const load = (params = {}) => {
     setLoading(true)
@@ -152,6 +164,44 @@ export default function Orders() {
         o.tracking_code?.toLowerCase().includes(search.toLowerCase())
       )
     : orders
+
+  const sorted = useMemo(() => {
+    const rows = [...filtered]
+    const mult = sortDir === 'asc' ? 1 : -1
+    rows.sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'id':
+          cmp = cmpNum(a.id, b.id)
+          break
+        case 'customer_name':
+          cmp = cmpNullableStr(a.customer_name, b.customer_name)
+          break
+        case 'customer_phone':
+          cmp = cmpNullableStr(a.customer_phone, b.customer_phone)
+          break
+        case 'status':
+          cmp = cmpNullableStr(a.status, b.status)
+          break
+        case 'cargo': {
+          const ca = [a.cargo_tracking_code, a.cargo_company].filter(Boolean).join(' ')
+          const cb = [b.cargo_tracking_code, b.cargo_company].filter(Boolean).join(' ')
+          cmp = cmpNullableStr(ca, cb)
+          break
+        }
+        case 'total_price':
+          cmp = cmpNum(a.total_price, b.total_price)
+          break
+        case 'created_at':
+          cmp = cmpTime(a.created_at, b.created_at)
+          break
+        default:
+          cmp = cmpNum(a.id, b.id)
+      }
+      return mult * cmp
+    })
+    return rows
+  }, [filtered, sortKey, sortDir])
 
   return (
     <>
@@ -190,7 +240,7 @@ export default function Orders() {
       <div className="card">
         {loading ? (
           <div className="spinner" />
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📦</div>
             Sipariş bulunamadı
@@ -200,18 +250,18 @@ export default function Orders() {
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Müşteri</th>
-                  <th>Telefon</th>
-                  <th>Durum</th>
-                  <th>Kargo</th>
-                  <th>Tutar</th>
-                  <th>Tarih</th>
-                  <th></th>
+                  <SortableTh columnKey="id" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>#</SortableTh>
+                  <SortableTh columnKey="customer_name" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Müşteri</SortableTh>
+                  <SortableTh columnKey="customer_phone" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Telefon</SortableTh>
+                  <SortableTh columnKey="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Durum</SortableTh>
+                  <SortableTh columnKey="cargo" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Kargo</SortableTh>
+                  <SortableTh columnKey="total_price" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right">Tutar</SortableTh>
+                  <SortableTh columnKey="created_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Tarih</SortableTh>
+                  <th aria-label="İşlemler" />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(o => (
+                {sorted.map(o => (
                   <tr key={o.id}>
                     <td style={{ color: 'var(--text3)', fontFamily: 'monospace' }}>#{o.id}</td>
                     <td style={{ fontWeight: 500 }}>{o.customer_name}</td>

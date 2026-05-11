@@ -3,7 +3,9 @@ Dashboard Router — Yönetici Paneli için Toplu KPI Verisi
 """
 
 from fastapi import APIRouter, BackgroundTasks, Depends
+from datetime import date, timedelta
 import asyncio
+import json
 import time
 import sys
 import os
@@ -22,6 +24,45 @@ _ai_tasks_ts: float = 0
 _AI_TASKS_TTL = 900  # 15 dakika
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+def _build_live_briefing(
+    *,
+    as_of_date: str,
+    today_new_orders: int,
+    by_status: dict,
+    critical_stock_count: int,
+    delayed_cargo_count: int,
+) -> dict:
+    """LLM gerektirmeden Genel Bakış AI brifingi için anlık Türkçe özet."""
+    haz = int(by_status.get("hazırlanıyor", 0) or 0)
+    karg = int(by_status.get("kargoda", 0) or 0)
+    s = int(critical_stock_count)
+    d = int(delayed_cargo_count)
+    tnew = int(today_new_orders)
+
+    p1 = (
+        f"Bugün {tnew} yeni sipariş kaydı. {haz} sipariş hazırlanıyor "
+        f"(kargoya verilmeyi bekliyor), {karg} sipariş kargoda."
+    )
+    p2 = f"{s} ürün stok eşiği veya altında."
+    if d:
+        p2 += f" {d} kargo sevkiyatında gecikme veya risk uyarısı."
+
+    return {
+        "as_of_date": as_of_date,
+        "source": "live_db",
+        "counts": {
+            "today_new_orders": tnew,
+            "hazirlaniyor": haz,
+            "kargoya_verilebilir": haz,
+            "kargoda": karg,
+            "kritik_stok_urun": s,
+            "kargo_gecikme": d,
+        },
+        "paragraphs": [p1, p2],
+        "lead": f"{p1} {p2}",
+    }
 
 
 @router.get("/stats", summary="Dashboard KPI özeti")
@@ -87,18 +128,82 @@ def get_dashboard_stats(current_user: CurrentUser = Depends(get_current_user)):
         LIMIT 5
     """, (tenant_id,)).fetchall()
 
-    # Son rapor var mı?
+    today_orders_row = cursor.execute(
+        """
+        SELECT COUNT(*) AS c FROM orders
+        WHERE tenant_id = ? AND date(created_at) = date('now', 'localtime')
+        """,
+        (tenant_id,),
+    ).fetchone()
+    today_new_orders = int(today_orders_row["c"] if today_orders_row else 0)
+
+    # Son rapor (kiracıya özel; bugün veya en son)
     latest_report = cursor.execute("""
-        SELECT id, date, report_text, created_at
+        SELECT id, tenant_id, date, report_text, briefing_json, raw_data, model_version, source, created_at
         FROM daily_reports
+        WHERE tenant_id = ?
         ORDER BY created_at DESC
         LIMIT 1
-    """).fetchone()
+    """, (tenant_id,)).fetchone()
+
+    lr_out = None
+    if latest_report:
+        lr_out = dict(latest_report)
+        bj = lr_out.get("briefing_json")
+        if bj:
+            try:
+                lr_out["briefing"] = json.loads(bj)
+            except Exception:
+                lr_out["briefing"] = None
+
+    yday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday_metrics = cursor.execute(
+        """
+        SELECT metric_date, order_count, revenue, cancelled_count, avg_order_value, metrics_json, computed_at
+        FROM tenant_daily_metrics
+        WHERE tenant_id = ? AND metric_date = ?
+        """,
+        (tenant_id, yday),
+    ).fetchone()
+
+    forecast_rows = cursor.execute(
+        """
+        SELECT forecast_for_date, payload_json, generated_at
+        FROM tenant_daily_forecasts
+        WHERE tenant_id = ? AND forecast_for_date > date('now', 'localtime')
+        ORDER BY forecast_for_date ASC, generated_at DESC
+        """,
+        (tenant_id,),
+    ).fetchall()
+    forecast_by_date: dict = {}
+    for r in forecast_rows:
+        fd = r["forecast_for_date"]
+        if fd in forecast_by_date:
+            continue
+        try:
+            payload = json.loads(r["payload_json"])
+        except Exception:
+            payload = {}
+        forecast_by_date[fd] = {
+            "forecast_for_date": fd,
+            "payload": payload,
+            "generated_at": r["generated_at"],
+        }
+    forecast_week = sorted(forecast_by_date.values(), key=lambda x: x["forecast_for_date"])[:7]
+
+    live_briefing = _build_live_briefing(
+        as_of_date=date.today().isoformat(),
+        today_new_orders=today_new_orders,
+        by_status=by_status,
+        critical_stock_count=len(low_stock),
+        delayed_cargo_count=len(delayed),
+    )
 
     conn.close()
 
     return {
         "tenant": tenant_public_payload(tenant_id),
+        "live_briefing": live_briefing,
         "orders": {
             "total": len(orders),
             "by_status": by_status,
@@ -125,7 +230,9 @@ def get_dashboard_stats(current_user: CurrentUser = Depends(get_current_user)):
             "recent": [dict(r) for r in recent_tickets],
         },
         "recent_orders": [dict(r) for r in recent_orders],
-        "latest_report": dict(latest_report) if latest_report else None,
+        "latest_report": lr_out,
+        "yesterday_metrics": dict(yesterday_metrics) if yesterday_metrics else None,
+        "forecast_week": forecast_week,
     }
 
 
@@ -184,16 +291,16 @@ def get_analytics(current_user: CurrentUser = Depends(get_current_user)):
         if d["stock_quantity"] <= d["low_stock_threshold"] and d["sold_qty"] > 0:
             risks.append({
                 "type": "stock_demand_conflict",
-                "title": f"{d['name']} hem satiliyor hem kritik stokta",
-                "body": f"Stok {d['stock_quantity']}, esik {d['low_stock_threshold']}. Yenileme oncelikli.",
+                "title": f"{d['name']} hem satılıyor hem kritik stokta",
+                "body": f"Stok {d['stock_quantity']}, eşik {d['low_stock_threshold']}. Yenileme öncelikli.",
                 "priority": "high",
             })
     for o in large_orders:
         d = dict(o)
         risks.append({
             "type": "large_order_review",
-            "title": f"Siparis #{d['id']} insan onayi gerektirebilir",
-            "body": f"{d['customer_name']} icin {d['total_items']} adet / {d['total_price']} TL siparis.",
+            "title": f"Sipariş #{d['id']} insan onayı gerektirebilir",
+            "body": f"{d['customer_name']} için {d['total_items']} adet / {d['total_price']} TL sipariş.",
             "priority": "normal",
         })
 
@@ -251,35 +358,51 @@ def get_cargo_dashboard(current_user: CurrentUser = Depends(get_current_user)):
     }
 
 
-@router.get("/sales-chart", summary="Son 7 günlük satış grafiği")
-def get_sales_chart(current_user: CurrentUser = Depends(get_current_user)):
-    """Son 7 günün günlük sipariş sayısı ve gelir verisi."""
+@router.get("/sales-chart", summary="Gunluk satis grafigi (canli siparisler)")
+def get_sales_chart(
+    days: int = 14,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    Gunluk siparis sayisi ve gelir — dogrudan `orders` tablosundan (grafik ile KPI tutarli).
+    `days`: 7–30 arasi (varsayilan 14).
+    """
+    from datetime import date, timedelta
+
+    tenant_id = current_user.tenant_id
+    span = min(max(int(days), 7), 30)
+    lookback = span - 1
+    today = date.today()
+
     conn = get_connection()
-    rows = conn.execute("""
+    rows = conn.execute(
+        f"""
         SELECT
             date(created_at) AS day,
-            COUNT(*)         AS order_count,
+            COUNT(*) AS order_count,
             COALESCE(SUM(CASE WHEN status != 'iptal' THEN total_price ELSE 0 END), 0) AS revenue
         FROM orders
-        WHERE created_at >= date('now', '-6 days', 'localtime') AND tenant_id = ?
+        WHERE created_at >= date('now', '-{lookback} days', 'localtime')
+          AND tenant_id = ?
         GROUP BY day
         ORDER BY day ASC
-    """, (current_user.tenant_id,)).fetchall()
+        """,
+        (tenant_id,),
+    ).fetchall()
     conn.close()
 
-    # Son 7 günün tamamını doldur (veri olmayan günler 0 olsun)
-    from datetime import date, timedelta
-    today = date.today()
     data_map = {r["day"]: dict(r) for r in rows}
     result = []
-    for i in range(6, -1, -1):
+    for i in range(lookback, -1, -1):
         d = (today - timedelta(days=i)).isoformat()
-        result.append({
-            "day": d,
-            "order_count": data_map.get(d, {}).get("order_count", 0),
-            "revenue": round(data_map.get(d, {}).get("revenue", 0.0), 2),
-        })
-    return {"days": result}
+        result.append(
+            {
+                "day": d,
+                "order_count": int(data_map.get(d, {}).get("order_count", 0) or 0),
+                "revenue": round(float(data_map.get(d, {}).get("revenue", 0.0) or 0), 2),
+            }
+        )
+    return {"days": result, "days_span": span}
 
 
 @router.post("/ai-tasks", summary="LLM destekli gunluk gorev listesi uret")

@@ -39,22 +39,96 @@ function IconLogOut(props) {
   )
 }
 
+function IconNavClipboard(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M9 14h6" />
+      <path d="M9 10h6" />
+      <path d="M9 18h4" />
+    </svg>
+  )
+}
+
+function IconNavSparkles(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z" />
+    </svg>
+  )
+}
+
+function IconNavAlertTriangle(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  )
+}
+
+function IconNavPackage(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </svg>
+  )
+}
+
+function IconNavShoppingCart(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <circle cx="8" cy="21" r="1" />
+      <circle cx="19" cy="21" r="1" />
+      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-9.15H5.12" />
+    </svg>
+  )
+}
+
+function IconNavTruck(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+      <path d="M15 18H9" />
+      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" />
+      <circle cx="17" cy="18" r="2" />
+      <circle cx="7" cy="18" r="2" />
+    </svg>
+  )
+}
+
+function IconNavFileBarChart(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+      <polyline points="14 2 14 8 20 8" />
+      <path d="M12 18V12" />
+      <path d="M9 15v3" />
+      <path d="M15 13v5" />
+    </svg>
+  )
+}
+
 const NAV = [
-  { to: '/',          icon: '◌', label: 'Bugun' },
-  { to: '/assistant', icon: '✦', label: 'AI Asistan', highlight: true },
-  { to: '/tickets',   icon: '!', label: 'Mudahale', badge: 'openTickets' },
-  { to: '/orders',    icon: '□', label: 'Siparisler' },
-  { to: '/inventory', icon: '▥', label: 'Stok' },
-  { to: '/cargo',     icon: '→', label: 'Kargo' },
-  { to: '/reports',   icon: '▤', label: 'Raporlar' },
+  { to: '/',          Icon: IconNavClipboard, label: 'Günün özeti' },
+  { to: '/assistant', Icon: IconNavSparkles, label: 'AI Asistan', highlight: true },
+  { to: '/tickets',   Icon: IconNavAlertTriangle, label: 'Mudahale', badge: 'openTickets' },
+  { to: '/inventory', Icon: IconNavPackage, label: 'Stok' },
+  { to: '/orders',    Icon: IconNavShoppingCart, label: 'Siparisler' },
+  { to: '/cargo',     Icon: IconNavTruck, label: 'Kargo' },
+  { to: '/reports',   Icon: IconNavFileBarChart, label: 'Raporlar' },
 ]
 
 const PAGE_TITLES = {
-  '/':          { title: 'Bugun', sub: 'Sistem isletmenizi izliyor ve oncelikleri one cikariyor' },
+  '/':          { title: '', sub: '' },
   '/assistant': { title: 'AI Asistan', sub: 'Dogal dil ile stok, siparis ve bilet yonetimi' },
   '/tickets':   { title: 'Mudahale', sub: 'Insan onayi bekleyen konular' },
   '/orders':    { title: 'Siparisler', sub: 'Hazirlik, kargo ve teslim surecleri' },
-  '/inventory': { title: 'Stok', sub: 'Kritik stok ve yenileme akislari' },
+  '/inventory': { title: '', sub: '' },
   '/cargo':     { title: 'Kargo', sub: 'Gecikme ve teslimat sinyalleri' },
   '/reports':   { title: 'Raporlar', sub: 'AI brifingleri ve icgoruler' },
 }
@@ -158,7 +232,9 @@ export default function Layout({ children }) {
               end={item.to === '/'}
               className={({ isActive }) => `nav-item${item.highlight ? ' nav-item-highlight' : ''}${isActive ? ' active' : ''}`}
             >
-              <span className="icon">{item.icon}</span>
+              <span className="icon" aria-hidden>
+                <item.Icon />
+              </span>
               <span>{item.label}</span>
               {item.badge === 'openTickets' && openTickets > 0 && <span className="nav-badge">{openTickets}</span>}
             </NavLink>
@@ -171,8 +247,8 @@ export default function Layout({ children }) {
       <div className="main">
         <div className="topbar command-topbar">
           <div>
-            <div className="topbar-title">{page.title}</div>
-            <div className="topbar-sub">{page.sub}</div>
+            {page.title ? <div className="topbar-title">{page.title}</div> : null}
+            {page.sub ? <div className="topbar-sub">{page.sub}</div> : null}
           </div>
           <div className="topbar-actions">
             <button

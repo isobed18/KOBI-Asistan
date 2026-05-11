@@ -13,6 +13,8 @@ from datetime import datetime, date
 from tools.order_product_tools import gunluk_ozet, kritik_stok_listesi
 from tools.kargo_tools import kargo_takip
 from database.db import get_connection
+from database.briefing import build_briefing_json
+from database.daily_metrics import rollup_yesterday_all_tenants, refresh_forecasts_all_tenants
 from agent.llm_service import (
     agenerate_daily_report,
     agenerate_stock_alert_content,
@@ -78,13 +80,27 @@ def _create_ticket_in_db(
     )
 
 
-def _save_daily_report(report_text: str, raw_data: dict) -> int:
+def _save_daily_report(report_text: str, raw_data: dict, tenant_id: int) -> int:
+    bj = build_briefing_json(raw_data, report_text)
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO daily_reports (date, report_text, raw_data)
-        VALUES (?, ?, ?)
-    """, (date.today().isoformat(), report_text, json.dumps(raw_data, ensure_ascii=False)))
+    cursor.execute(
+        """
+        INSERT INTO daily_reports (
+            tenant_id, date, report_text, raw_data, briefing_json, model_version, source
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            tenant_id,
+            date.today().isoformat(),
+            report_text,
+            json.dumps(raw_data, ensure_ascii=False),
+            bj,
+            "scheduler",
+            "scheduler",
+        ),
+    )
     report_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -97,8 +113,8 @@ def _save_daily_report(report_text: str, raw_data: dict) -> int:
 
 async def _sabah_raporu_for_tenant(tenant_id: int):
     """Tek bir tenant için sabah raporu üretir."""
-    ozet = gunluk_ozet.invoke({})
-    kritik = kritik_stok_listesi.invoke({})
+    ozet = gunluk_ozet.invoke({"tenant_id": tenant_id})
+    kritik = kritik_stok_listesi.invoke({"tenant_id": tenant_id})
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -135,7 +151,7 @@ async def _sabah_raporu_for_tenant(tenant_id: int):
         raw_data["ai_tasks"] = None
 
     report_text = await agenerate_daily_report(raw_data)
-    report_id = _save_daily_report(report_text, raw_data)
+    report_id = _save_daily_report(report_text, raw_data, tenant_id)
 
     _add_notification(
         "rapor",
@@ -173,7 +189,7 @@ async def stok_alarm():
 
 async def _stok_alarm_for_tenant(tenant_id: int):
     try:
-        kritik = kritik_stok_listesi.invoke({})
+        kritik = kritik_stok_listesi.invoke({"tenant_id": tenant_id})
         urunler = kritik.get("urunler", [])
         if not urunler:
             return
@@ -293,7 +309,23 @@ async def _kargo_gecikme_for_tenant(tenant_id: int):
 # Scheduler Setup
 # ---------------------------------------------------------------------------
 
+def rollup_ve_tahmin():
+    """Gece: dünün metrikleri + basit ileri tahmin."""
+    try:
+        rollup_yesterday_all_tenants()
+        refresh_forecasts_all_tenants()
+    except Exception as e:
+        print(f"[HATA] rollup_ve_tahmin: {e}")
+
+
 def setup_scheduler():
+    scheduler.add_job(
+        rollup_ve_tahmin,
+        CronTrigger(hour=0, minute=15),
+        id="rollup_metrics",
+        name="Gunluk metrik rollup + tahmin",
+        replace_existing=True,
+    )
     scheduler.add_job(
         sabah_raporu,
         CronTrigger(hour=8, minute=0),
@@ -316,7 +348,7 @@ def setup_scheduler():
         replace_existing=True,
     )
     scheduler.start()
-    print("[OK] Scheduler başlatıldı (sabah_raporu: 08:00, stok_alarm: 2sa, kargo: 4sa)")
+    print("[OK] Scheduler baslatildi (rollup: 00:15, sabah_raporu: 08:00, stok_alarm: 2sa, kargo: 4sa)")
 
 
 def stop_scheduler():
