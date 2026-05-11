@@ -2,13 +2,22 @@
 Dashboard Router — Yönetici Paneli için Toplu KPI Verisi
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
+import asyncio
+import time
 import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from database.db import get_connection
+
+# ---------------------------------------------------------------------------
+# AI Tasks cache (15 dakika TTL)
+# ---------------------------------------------------------------------------
+_ai_tasks_cache: dict | None = None
+_ai_tasks_ts: float = 0
+_AI_TASKS_TTL = 900  # 15 dakika
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -156,4 +165,136 @@ def get_cargo_dashboard():
         "total": len(result),
         "delayed_count": sum(1 for r in result if r["is_delayed"]),
         "shipments": result,
+    }
+
+
+@router.get("/sales-chart", summary="Son 7 günlük satış grafiği")
+def get_sales_chart():
+    """Son 7 günün günlük sipariş sayısı ve gelir verisi."""
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT
+            date(created_at) AS day,
+            COUNT(*)         AS order_count,
+            COALESCE(SUM(CASE WHEN status != 'iptal' THEN total_price ELSE 0 END), 0) AS revenue
+        FROM orders
+        WHERE created_at >= date('now', '-6 days', 'localtime')
+        GROUP BY day
+        ORDER BY day ASC
+    """).fetchall()
+    conn.close()
+
+    # Son 7 günün tamamını doldur (veri olmayan günler 0 olsun)
+    from datetime import date, timedelta
+    today = date.today()
+    data_map = {r["day"]: dict(r) for r in rows}
+    result = []
+    for i in range(6, -1, -1):
+        d = (today - timedelta(days=i)).isoformat()
+        result.append({
+            "day": d,
+            "order_count": data_map.get(d, {}).get("order_count", 0),
+            "revenue": round(data_map.get(d, {}).get("revenue", 0.0), 2),
+        })
+    return {"days": result}
+
+
+@router.post("/ai-tasks", summary="LLM destekli günlük görev listesi üret")
+async def generate_ai_tasks(background_tasks: BackgroundTasks):
+    """
+    İşletme verilerine bakıp LLM'e proaktif görev listesi ürettirir.
+    15 dakika önbelleğe alınır. Anlık veri döner, LLM yoksa template kullanılır.
+    """
+    global _ai_tasks_cache, _ai_tasks_ts
+
+    now = time.time()
+    if _ai_tasks_cache and (now - _ai_tasks_ts) < _AI_TASKS_TTL:
+        return _ai_tasks_cache
+
+    # Ham veri topla
+    conn = get_connection()
+    low_stock = conn.execute("""
+        SELECT name, stock_quantity, low_stock_threshold FROM products
+        WHERE stock_quantity <= low_stock_threshold AND is_active = 1
+        ORDER BY stock_quantity ASC LIMIT 5
+    """).fetchall()
+    open_tickets = conn.execute(
+        "SELECT COUNT(*) AS c FROM tickets WHERE status IN ('open','in_progress')"
+    ).fetchone()["c"]
+    pending_orders = conn.execute(
+        "SELECT COUNT(*) AS c FROM orders WHERE status = 'hazırlanıyor'"
+    ).fetchone()["c"]
+    delayed_cargo = conn.execute("""
+        SELECT COUNT(*) AS c FROM orders o
+        LEFT JOIN cargo_tracking ct ON ct.tracking_code = o.cargo_tracking_code
+        WHERE o.status = 'kargoda' AND ct.current_status IN ('Şubede Bekliyor','Gecikti','İade Sürecinde')
+    """).fetchone()["c"]
+    conn.close()
+
+    # LLM ile görev üret (başarısız olursa template)
+    try:
+        from agent.llm_service import agenerate_ai_tasks
+        result = await agenerate_ai_tasks({
+            "low_stock": [dict(r) for r in low_stock],
+            "open_tickets": open_tickets,
+            "pending_orders": pending_orders,
+            "delayed_cargo": delayed_cargo,
+        })
+    except Exception:
+        result = _build_template_tasks(low_stock, open_tickets, pending_orders, delayed_cargo)
+
+    _ai_tasks_cache = result
+    _ai_tasks_ts = now
+    return result
+
+
+def _build_template_tasks(low_stock, open_tickets, pending_orders, delayed_cargo) -> dict:
+    """LLM yokken basit kural tabanlı görev listesi."""
+    tasks = []
+    if low_stock:
+        names = ", ".join(r["name"] for r in low_stock[:3])
+        tasks.append({
+            "id": "stock_replenish",
+            "icon": "📦",
+            "title": f"{len(low_stock)} ürün kritik stokta",
+            "body": f"{names} stok siparişi ver.",
+            "priority": "high",
+            "link": "/inventory",
+            "action": "inventory",
+        })
+    if open_tickets > 0:
+        tasks.append({
+            "id": "tickets_pending",
+            "icon": "🎫",
+            "title": f"{open_tickets} açık bilet bekliyor",
+            "body": "Müşteri taleplerini incele ve yanıtla.",
+            "priority": "high" if open_tickets > 5 else "normal",
+            "link": "/tickets",
+            "action": "tickets",
+        })
+    if pending_orders > 0:
+        tasks.append({
+            "id": "orders_prepare",
+            "icon": "📋",
+            "title": f"{pending_orders} sipariş hazırlanmayı bekliyor",
+            "body": "Siparişleri hazırlayıp kargoya ver.",
+            "priority": "normal",
+            "link": "/orders",
+            "action": "orders",
+        })
+    if delayed_cargo > 0:
+        tasks.append({
+            "id": "cargo_delay",
+            "icon": "🚚",
+            "title": f"{delayed_cargo} kargo gecikmesi var",
+            "body": "Geciken kargolar için müşterileri bilgilendir.",
+            "priority": "high",
+            "link": "/cargo",
+            "action": "cargo",
+        })
+    return {
+        "briefing": f"Bugün {len(tasks)} öncelikli konu var.",
+        "tasks": tasks,
+        "generated_at": time.strftime("%H:%M"),
+        "source": "template",
     }

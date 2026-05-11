@@ -56,6 +56,14 @@ def _create_ticket_in_db(
     ticket_id = cursor.lastrowid
     conn.commit()
     conn.close()
+
+    # Admin bildirimi
+    try:
+        from integrations.notifier import notify_new_ticket
+        notify_new_ticket(ticket_id, title, priority, type_, description)
+    except Exception:
+        pass
+
     return ticket_id
 
 

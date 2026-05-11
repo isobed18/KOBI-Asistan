@@ -63,3 +63,9 @@ export const clearAdminSession = (session_id) =>
 
 // Notifications
 export const getNotifications = () => req('/api/v1/notifications')
+export const markNotificationRead = (id) =>
+  req(`/api/v1/notifications/${id}/read`, { method: 'POST' })
+
+// Dashboard extras
+export const getSalesChart  = () => req('/dashboard/sales-chart')
+export const generateAiTasks = () => req('/dashboard/ai-tasks', { method: 'POST' })

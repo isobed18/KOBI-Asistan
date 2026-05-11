@@ -7,23 +7,84 @@ Müşteri auth gerekmez. Tüm ürün/sipariş/bilet verilerine tam erişim.
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from difflib import SequenceMatcher
 from langchain_core.tools import tool
 from database.db import get_connection
 
 
 # ---------------------------------------------------------------------------
-# Yardımcı — Ürün bul
+# Yardımcı — Türkçe karakter normalleştirme & fuzzy arama
 # ---------------------------------------------------------------------------
 
-def _find_product(urun_adi: str):
-    """Ürün adına göre aktif ürünleri bulur. (name LIKE %...%)"""
+def _normalize(text: str) -> str:
+    """Türkçe karakterleri ASCII'ye dönüştürür, küçük harfe çevirir."""
+    return (
+        text.upper()
+        .replace('İ', 'I').replace('Ş', 'S').replace('Ğ', 'G')
+        .replace('Ü', 'U').replace('Ö', 'O').replace('Ç', 'C')
+        .lower()
+        .strip()
+    )
+
+
+def _fuzzy_score(query: str, name: str) -> float:
+    """
+    Sorgu ile ürün adı arasındaki benzerlik skoru (0-1).
+    Üç metrik karması: tam içerik eşleşmesi, kelime örtüşmesi, dizi benzerliği.
+    """
+    q = _normalize(query)
+    n = _normalize(name)
+
+    # Tam içerik eşleşmesi en yüksek öncelik
+    if q == n:
+        return 1.0
+    if q in n or n in q:
+        return 0.95
+
+    # Kelime bazlı örtüşme (yazım hatalarına dayanıklı)
+    q_words = q.split()
+    n_words = n.split()
+    if q_words:
+        hits = 0
+        for qw in q_words:
+            for nw in n_words:
+                # Kelime 4+ char ise prefix eşleşmesi yeterli
+                if qw == nw:
+                    hits += 1; break
+                if len(qw) >= 4 and (nw.startswith(qw[:4]) or qw.startswith(nw[:4])):
+                    hits += 0.85; break
+                if len(qw) >= 3 and (qw in nw or nw in qw):
+                    hits += 0.7; break
+        word_score = hits / len(q_words)
+    else:
+        word_score = 0.0
+
+    # Genel dizi benzerliği (Levenshtein'a yakın)
+    seq_score = SequenceMatcher(None, q, n).ratio()
+
+    return max(word_score * 0.88, seq_score * 0.72)
+
+
+def _find_product(urun_adi: str, threshold: float = 0.42):
+    """
+    Fuzzy search ile aktif ürünleri bulur.
+    Yazım hataları ve Türkçe karakter farklılıklarına dayanıklı.
+    En iyi 5 eşleşmeyi döner.
+    """
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, name, stock_quantity FROM products WHERE name LIKE ? AND is_active = 1",
-        (f"%{urun_adi}%",)
+        "SELECT id, name, stock_quantity FROM products WHERE is_active = 1"
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+
+    scored = []
+    for r in rows:
+        s = _fuzzy_score(urun_adi, r["name"])
+        if s >= threshold:
+            scored.append((s, dict(r)))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [item for _, item in scored[:5]]
 
 
 def _do_stok_guncelle(urun_adi: str, miktar: int, neden: str) -> dict:
@@ -98,6 +159,41 @@ def admin_toplu_stok_guncelle(guncellemeler: list) -> dict:
 # Sipariş Araçları
 # ---------------------------------------------------------------------------
 
+def _deduct_stock_for_order(conn, siparis_no: int) -> list:
+    """
+    Sipariş kargoya verilirken ürün stoklarını düşürür.
+    Her sipariş kalemi için stock_movements kaydı yazar.
+    Stok yetersizse negatife düşmez — uyarı döner.
+    """
+    items = conn.execute(
+        "SELECT oi.product_id, oi.quantity, p.name, p.stock_quantity "
+        "FROM order_items oi JOIN products p ON p.id = oi.product_id "
+        "WHERE oi.order_id = ?",
+        (siparis_no,),
+    ).fetchall()
+
+    warnings = []
+    for item in items:
+        before = item["stock_quantity"]
+        after  = before - item["quantity"]
+        if after < 0:
+            warnings.append(
+                f"{item['name']}: stok yetersiz (mevcut {before}, gereken {item['quantity']})"
+            )
+            after = 0  # sıfırda bırak, negatife düşürme
+        conn.execute(
+            "UPDATE products SET stock_quantity = ? WHERE id = ?",
+            (after, item["product_id"]),
+        )
+        conn.execute(
+            "INSERT INTO stock_movements "
+            "(product_id, delta, reason, before_qty, after_qty) VALUES (?,?,?,?,?)",
+            (item["product_id"], -item["quantity"],
+             f"Sipariş #{siparis_no} kargoya verildi", before, after),
+        )
+    return warnings
+
+
 def _do_siparis_guncelle(siparis_no: int, yeni_durum: str,
                           kargo_kodu=None, kargo_firmasi=None, siparis_notu=None) -> dict:
     GECERLI = ("hazırlanıyor", "kargoda", "teslim_edildi", "iptal")
@@ -123,9 +219,16 @@ def _do_siparis_guncelle(siparis_no: int, yeni_durum: str,
     params.append(siparis_no)
 
     conn.execute(f"UPDATE orders SET {', '.join(fields)} WHERE id = ?", params)
+
+    # Kargoya geçişte stok otomatik düşür (sadece hazırlanıyor → kargoda)
+    stok_uyarilari = []
+    if yeni_durum == "kargoda" and order["status"] == "hazırlanıyor":
+        stok_uyarilari = _deduct_stock_for_order(conn, siparis_no)
+
     conn.commit()
     conn.close()
-    return {
+
+    result = {
         "basari": True,
         "siparis_no": siparis_no,
         "musteri": order["customer_name"],
@@ -134,6 +237,9 @@ def _do_siparis_guncelle(siparis_no: int, yeni_durum: str,
         "kargo_kodu": kargo_kodu,
         "kargo_firmasi": kargo_firmasi,
     }
+    if stok_uyarilari:
+        result["stok_uyarilari"] = stok_uyarilari
+    return result
 
 
 @tool

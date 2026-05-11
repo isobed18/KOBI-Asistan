@@ -1,5 +1,5 @@
 import { Component } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from './components/Layout.jsx'
 import Overview  from './pages/Overview.jsx'
 import Orders    from './pages/Orders.jsx'
@@ -8,6 +8,8 @@ import Inventory from './pages/Inventory.jsx'
 import Tickets   from './pages/Tickets.jsx'
 import Reports        from './pages/Reports.jsx'
 import AdminAssistant from './pages/AdminAssistant.jsx'
+import Login          from './pages/Login.jsx'
+import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -41,19 +43,43 @@ class ErrorBoundary extends Component {
   }
 }
 
+function RequireAuth({ children }) {
+  const { isAuthenticated } = useAuth()
+  const location = useLocation()
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
+  return children
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/*" element={
+        <RequireAuth>
+          <Layout>
+            <Routes>
+              <Route path="/"          element={<ErrorBoundary><Overview /></ErrorBoundary>}  />
+              <Route path="/orders"    element={<ErrorBoundary><Orders /></ErrorBoundary>}    />
+              <Route path="/cargo"     element={<ErrorBoundary><Cargo /></ErrorBoundary>}     />
+              <Route path="/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
+              <Route path="/tickets"   element={<ErrorBoundary><Tickets /></ErrorBoundary>}   />
+              <Route path="/reports"   element={<ErrorBoundary><Reports /></ErrorBoundary>}   />
+              <Route path="/assistant" element={<ErrorBoundary><AdminAssistant /></ErrorBoundary>} />
+              <Route path="*"          element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
+        </RequireAuth>
+      } />
+    </Routes>
+  )
+}
+
 export default function App() {
   return (
-    <Layout>
-      <Routes>
-        <Route path="/"          element={<ErrorBoundary><Overview /></ErrorBoundary>}  />
-        <Route path="/orders"    element={<ErrorBoundary><Orders /></ErrorBoundary>}    />
-        <Route path="/cargo"     element={<ErrorBoundary><Cargo /></ErrorBoundary>}     />
-        <Route path="/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
-        <Route path="/tickets"   element={<ErrorBoundary><Tickets /></ErrorBoundary>}   />
-        <Route path="/reports"   element={<ErrorBoundary><Reports /></ErrorBoundary>}   />
-        <Route path="/assistant" element={<ErrorBoundary><AdminAssistant /></ErrorBoundary>} />
-        <Route path="*"          element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }

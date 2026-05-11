@@ -111,7 +111,7 @@ body {
   padding: 0 24px;
   gap: 16px;
 }
-.topbar-title { font-size: 16px; font-weight: 600; flex: 1; }
+.topbar-title { font-size: 16px; font-weight: 600; }
 .topbar-sub   { font-size: 12px; color: var(--text2); }
 
 .content {
@@ -494,3 +494,238 @@ select option { background: var(--surface); }
   .admin-chat-layout { grid-template-columns: 1fr; height: auto; }
   .admin-chat-sidebar { display: none; }
 }
+
+/* ============================================================
+   LIGHT THEME
+   ============================================================ */
+[data-theme="light"] {
+  --bg:       #f1f5f9;
+  --surface:  #ffffff;
+  --surface2: #e2e8f0;
+  --border:   #e2e8f0;
+  --text:     #0f172a;
+  --text2:    #475569;
+  --text3:    #94a3b8;
+  --shadow:   0 4px 16px rgba(0,0,0,.10);
+}
+[data-theme="light"] body { background: var(--bg); color: var(--text); }
+[data-theme="light"] .nav-item.active { background: rgba(59,130,246,.12); }
+[data-theme="light"] .nav-item:hover  { background: var(--surface2); }
+
+/* ============================================================
+   TOPBAR EXTRAS
+   ============================================================ */
+.topbar {
+  justify-content: space-between;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-theme-btn {
+  font-size: 18px;
+  padding: 4px 8px;
+  line-height: 1;
+}
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+}
+.topbar-user-name {
+  font-weight: 500;
+}
+
+/* ============================================================
+   NOTIFICATION BELL
+   ============================================================ */
+.notif-bell-wrap {
+  position: relative;
+}
+.notif-bell-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  position: relative;
+  color: var(--text2);
+  transition: background .15s;
+}
+.notif-bell-btn:hover { background: var(--surface2); }
+.notif-bell-btn.has-unread { color: var(--text); }
+.notif-badge {
+  position: absolute;
+  top: 0; right: 0;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  overflow: hidden;
+}
+.notif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 13px;
+}
+.notif-list  { max-height: 340px; overflow-y: auto; }
+.notif-empty { padding: 20px; text-align: center; color: var(--text3); font-size: 13px; }
+.notif-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .12s;
+}
+.notif-item:hover   { background: var(--surface2); }
+.notif-item:last-child { border-bottom: none; }
+.notif-unread       { background: rgba(59,130,246,.06); }
+.notif-item-title   { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.notif-item-body    { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notif-item-ts      { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+/* ============================================================
+   LOGIN PAGE
+   ============================================================ */
+.login-page {
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow);
+}
+.login-logo {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.login-logo-icon { font-size: 48px; margin-bottom: 8px; }
+.login-logo h1   { font-size: 22px; font-weight: 700; }
+.login-logo p    { font-size: 13px; color: var(--text2); margin-top: 4px; }
+.login-form      { display: flex; flex-direction: column; gap: 16px; }
+.login-error {
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* ============================================================
+   WELCOME BANNER
+   ============================================================ */
+.welcome-banner {
+  animation: slide-down .4s ease;
+}
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.welcome-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(59,130,246,.12), rgba(168,85,247,.08));
+  border: 1px solid rgba(59,130,246,.25);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  margin-bottom: 4px;
+}
+.welcome-wave  { font-size: 28px; }
+.welcome-title { font-size: 15px; font-weight: 700; }
+.welcome-sub   { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.welcome-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: var(--radius);
+}
+.welcome-close:hover { background: var(--surface2); color: var(--text); }
+
+/* ============================================================
+   AI TASK BAR
+   ============================================================ */
+.ai-taskbar, .ai-taskbar-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 16px;
+}
+.ai-taskbar-icon { font-size: 22px; }
+
+.ai-taskbar-wrap {
+  background: var(--surface);
+  border: 1px solid rgba(59,130,246,.3);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.ai-taskbar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(59,130,246,.05);
+}
+.ai-task-list {
+  display: flex;
+  flex-direction: column;
+}
+.ai-task-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background .12s;
+}
+.ai-task-card:last-child { border-bottom: none; }
+.ai-task-card:hover      { background: var(--surface2); }
+.ai-task-icon   { font-size: 22px; min-width: 28px; text-align: center; }
+.ai-task-body   { flex: 1; }
+.ai-task-title  { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.ai-task-desc   { font-size: 12px; color: var(--text2); }
+.ai-task-actions { display: flex; align-items: center; gap: 6px; }
+

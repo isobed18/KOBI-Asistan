@@ -212,8 +212,17 @@ async def chat_stream(request: ChatRequest):
 
 @router.get("/notifications")
 async def get_notifications(limit: int = 20):
-    """Scheduler bildirimlerini doner."""
-    return notification_queue[-limit:]
+    """In-app bildirimleri döner (bilet + stok + sipariş olayları)."""
+    from integrations.notifier import get_notifications as _get
+    return _get(limit)
+
+
+@router.post("/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: int):
+    """Bildirimi okundu olarak işaretle."""
+    from integrations.notifier import mark_read
+    mark_read(notif_id)
+    return {"ok": True}
 
 
 def _get_auth_status(session_id: str) -> str:

@@ -12,6 +12,7 @@ export default defineConfig({
       '/dashboard': { target: 'http://localhost:8000', changeOrigin: true },
       '/tickets': { target: 'http://localhost:8000', changeOrigin: true },
       '/reports': { target: 'http://localhost:8000', changeOrigin: true },
+      '/auth':    { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
   build: {

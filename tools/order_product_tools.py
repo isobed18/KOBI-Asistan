@@ -208,6 +208,13 @@ def create_ticket(
     conn.commit()
     conn.close()
 
+    # Admin bildirimi
+    try:
+        from integrations.notifier import notify_new_ticket
+        notify_new_ticket(ticket_id, title, priority, type, description)
+    except Exception:
+        pass
+
     return {
         "bilet_id": ticket_id,
         "mesaj": f"Talebiniz #{ticket_id} numaralı bilet olarak kaydedildi. Ekibimiz en kısa sürede sizinle iletişime geçecek.",

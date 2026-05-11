@@ -116,6 +116,21 @@ def init_db():
         )
     """)
 
+    # KULLANICILAR (admin / kobi)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id    INTEGER NOT NULL DEFAULT 1,
+            username     TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            role         TEXT NOT NULL DEFAULT 'admin',  -- admin | viewer
+            full_name    TEXT,
+            is_active    INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT DEFAULT (datetime('now', 'localtime')),
+            last_login   TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("[OK] Veritabani hazir.")

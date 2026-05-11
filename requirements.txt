@@ -19,3 +19,8 @@ apscheduler>=3.10
 
 # Telegram
 python-telegram-bot>=21.0
+
+# Auth
+python-jose[cryptography]>=3.3
+passlib[bcrypt]>=1.7
+python-multipart>=0.0.9   # OAuth2 form data

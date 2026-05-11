@@ -24,7 +24,13 @@ class Settings(BaseSettings):
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_ADMIN_CHAT_ID: str = ""   # admin Telegram chat ID (bildirimler için)
     TELEGRAM_ENABLED: bool = True
+
+    # JWT Auth
+    JWT_SECRET: str = "kobi-super-secret-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 8   # 8 saat
 
     class Config:
         env_file = ".env"

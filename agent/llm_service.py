@@ -215,3 +215,60 @@ Yanıtı SADECE şu JSON formatında ver:
             "onerilen_miktar": recommended_qty,
             "tedarikci_emaili": f"LLM hatası nedeniyle e-posta taslağı oluşturulamadı: {e}"
         }
+
+
+# ---------------------------------------------------------------------------
+# AI Görev Listesi (Dashboard proaktif görevler)
+# ---------------------------------------------------------------------------
+
+async def agenerate_ai_tasks(data: dict) -> dict:
+    """
+    İşletme verisine bakarak bugünkü proaktif görev listesini üretir.
+    Döndürülen format:
+    {
+      "briefing": "Kısa özet",
+      "tasks": [{"id","icon","title","body","priority","link","action"}, ...],
+      "generated_at": "HH:MM",
+      "source": "llm"
+    }
+    """
+    import time as _time
+    llm = _create_llm(temperature=0.5)
+
+    low_stock_names = ", ".join(r["name"] for r in data.get("low_stock", []))
+    prompt = f"""Sen bir KOBİ yönetim asistanısın. Aşağıdaki verilere göre işletme sahibine bugün yapması gereken öncelikli görevleri listele.
+
+Veri:
+- Kritik stokta ürün sayısı: {len(data.get('low_stock', []))} ({low_stock_names or 'yok'})
+- Açık bilet sayısı: {data.get('open_tickets', 0)}
+- Bekleyen sipariş sayısı: {data.get('pending_orders', 0)}
+- Geciken kargo sayısı: {data.get('delayed_cargo', 0)}
+
+SADECE JSON döndür, başka metin yok:
+{{
+  "briefing": "Tek cümle özetle bugünkü durum",
+  "tasks": [
+    {{
+      "id": "benzersiz_id",
+      "icon": "emoji",
+      "title": "Görev başlığı",
+      "body": "Kısa açıklama",
+      "priority": "high|normal|low",
+      "link": "/inventory|/tickets|/orders|/cargo",
+      "action": "inventory|tickets|orders|cargo"
+    }}
+  ]
+}}"""
+
+    try:
+        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        result = _extract_json(response.content)
+        if result and "tasks" in result:
+            result["generated_at"] = _time.strftime("%H:%M")
+            result["source"] = "llm"
+            return result
+    except Exception:
+        pass
+
+    # Fallback — template (import'tan kaçın, dashboard.py'deki _build_template_tasks kullanacak)
+    raise RuntimeError("LLM AI tasks failed — caller should use template fallback")
