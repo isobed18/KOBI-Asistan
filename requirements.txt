@@ -22,5 +22,5 @@ python-telegram-bot>=21.0
 
 # Auth
 python-jose[cryptography]>=3.3
-passlib[bcrypt]>=1.7
+bcrypt>=4.0                # passlib yerine doğrudan bcrypt (Python 3.14 uyumlu)
 python-multipart>=0.0.9   # OAuth2 form data

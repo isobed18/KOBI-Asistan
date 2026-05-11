@@ -5,10 +5,12 @@ Sadece ilk kurulumda çalıştırın: python database/seed_users.py
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from database.db import get_connection, init_db
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _hash(password: str) -> str:
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
 
 DEFAULT_USERS = [
     {
@@ -30,19 +32,19 @@ def seed():
             "SELECT id FROM users WHERE username = ?", (u["username"],)
         ).fetchone()
         if existing:
-            print(f"  ⚠  '{u['username']}' zaten var, atlanıyor.")
+            print(f"  [SKIP] '{u['username']}' already exists, skipping.")
             continue
         conn.execute(
             "INSERT INTO users (username, password_hash, role, full_name, tenant_id) "
             "VALUES (?, ?, ?, ?, ?)",
-            (u["username"], pwd_ctx.hash(u["password"]), u["role"], u["full_name"], u["tenant_id"]),
+            (u["username"], _hash(u["password"]), u["role"], u["full_name"], u["tenant_id"]),
         )
         created += 1
-        print(f"  ✓  '{u['username']}' oluşturuldu (şifre: {u['password']})")
+        print(f"  [OK] '{u['username']}' olusturuldu (sifre: {u['password']})")
 
     conn.commit()
     conn.close()
-    print(f"\n[OK] {created} kullanıcı eklendi.")
+    print(f"\n[OK] {created} kullanici eklendi.")
 
 
 if __name__ == "__main__":
