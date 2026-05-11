@@ -316,12 +316,15 @@ async def generate_ai_tasks(background_tasks: BackgroundTasks, current_user: Cur
 
     try:
         from agent.llm_service import agenerate_ai_tasks
-        result = await agenerate_ai_tasks({
-            "low_stock": [dict(r) for r in low_stock],
-            "open_tickets": open_tickets,
-            "pending_orders": pending_orders,
-            "delayed_cargo": delayed_cargo,
-        })
+        result = await asyncio.wait_for(
+            agenerate_ai_tasks({
+                "low_stock": [dict(r) for r in low_stock],
+                "open_tickets": open_tickets,
+                "pending_orders": pending_orders,
+                "delayed_cargo": delayed_cargo,
+            }),
+            timeout=3.0,
+        )
     except Exception:
         result = _build_template_tasks(low_stock, open_tickets, pending_orders, delayed_cargo)
 

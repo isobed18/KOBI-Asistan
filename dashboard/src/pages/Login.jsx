@@ -1,26 +1,26 @@
+import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
   const { login } = useAuth()
-  const navigate  = useNavigate()
-  const location  = useLocation()
+  const navigate = useNavigate()
+  const location = useLocation()
   const from = location.state?.from?.pathname || '/'
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error,    setError]    = useState('')
-  const [loading,  setLoading]  = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleSubmit = async (event) => {
+    event.preventDefault()
     if (!username || !password) return
     setLoading(true)
     setError('')
 
     try {
-      // OAuth2PasswordRequestForm — application/x-www-form-urlencoded
       const body = new URLSearchParams({ username, password })
       const res = await fetch('/auth/login', {
         method: 'POST',
@@ -28,32 +28,37 @@ export default function Login() {
         body: body.toString(),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Giriş başarısız' }))
-        setError(err.detail || 'Giriş başarısız')
+        const err = await res.json().catch(() => ({ detail: 'Giris basarisiz' }))
+        setError(err.detail || 'Giris basarisiz')
         return
       }
       const data = await res.json()
       login(data.access_token, data.user)
       navigate(from, { replace: true })
-    } catch (e) {
-      setError('Sunucuya bağlanılamadı.')
+    } catch {
+      setError('Sunucuya baglanilamadi.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-logo">
-          <div className="login-logo-icon">📦</div>
-          <h1>KOBİ Asistan</h1>
-          <p>Yönetici Paneli</p>
+    <div className="login-page calm-login-page">
+      <motion.div
+        className="login-card calm-login-card"
+        initial={{ opacity: 0, scale: 0.97, y: 18 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="login-logo calm-login-logo">
+          <span className="calm-login-orb" />
+          <h1>Isiniz izleniyor.</h1>
+          <p>Onemli kararlar icin giris yapin.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label className="form-label">Kullanıcı Adı</label>
+            <label className="form-label">Kullanici adi</label>
             <input
               className="form-control"
               type="text"
@@ -64,9 +69,8 @@ export default function Login() {
               disabled={loading}
             />
           </div>
-
           <div className="form-group">
-            <label className="form-label">Şifre</label>
+            <label className="form-label">Sifre</label>
             <input
               className="form-control"
               type="password"
@@ -76,27 +80,12 @@ export default function Login() {
               disabled={loading}
             />
           </div>
-
-          {error && (
-            <div className="login-error">
-              ⚠️ {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ width: '100%', marginTop: 8, padding: '10px 0', fontSize: 15 }}
-            disabled={loading || !username || !password}
-          >
-            {loading ? '⏳ Giriş yapılıyor…' : '🔐 Giriş Yap'}
+          {error && <div className="login-error">{error}</div>}
+          <button type="submit" className="btn btn-primary calm-login-button" disabled={loading || !username || !password}>
+            {loading ? 'Hazirlaniyor...' : 'Devam et'}
           </button>
         </form>
-
-        <div style={{ marginTop: 20, fontSize: 12, color: 'var(--text3)', textAlign: 'center' }}>
-          v4.2 · LangGraph + FastAPI
-        </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

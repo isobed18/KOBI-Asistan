@@ -121,11 +121,16 @@ async def chat(request: ChatRequest):
             )
 
     # 5. LangGraph Agent
-    config = {"configurable": {"thread_id": session_id}}
+    config = {"configurable": {"thread_id": session_id, "tenant_id": 1}}
 
     try:
         result = agent_graph.invoke(
-            {"messages": [HumanMessage(content=request.mesaj)]},
+            {
+                "messages": [HumanMessage(content=request.mesaj)],
+                "tenant_id": 1,
+                "channel": "web",
+                "channel_user_id": session_id,
+            },
             config=config
         )
 
@@ -181,12 +186,17 @@ async def chat_stream(request: ChatRequest):
         set_session_scope(session_id, takip_kodu=takip_kodu)
 
     activate_scope(session_id)
-    config = {"configurable": {"thread_id": session_id}}
+    config = {"configurable": {"thread_id": session_id, "tenant_id": 1}}
 
     async def event_stream():
         try:
             for event in agent_graph.stream(
-                {"messages": [HumanMessage(content=request.mesaj)]},
+                {
+                    "messages": [HumanMessage(content=request.mesaj)],
+                    "tenant_id": 1,
+                    "channel": "web",
+                    "channel_user_id": session_id,
+                },
                 config=config,
                 stream_mode="updates"
             ):

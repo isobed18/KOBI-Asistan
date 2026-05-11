@@ -1,257 +1,248 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getDashboardStats, getSalesChart, generateAiTasks, getAnalytics } from '../api.js'
+import { generateAiTasks, getAnalytics, getDashboardStats, getSalesChart } from '../api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 function fmt(n) { return n?.toLocaleString('tr-TR') ?? '-' }
-function fmtMoney(n) {
-  return n != null
-    ? `₺${n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-    : '-'
+function money(n) {
+  return n != null ? `₺${n.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : '-'
 }
 
-function MiniSparkline({ days = [] }) {
-  if (!days.length) return <div className="mini-chart-empty">Veri bekleniyor</div>
-  const W = 620
-  const H = 150
-  const PAD = 16
+const variants = {
+  enter: { opacity: 0, y: 14, scale: 0.985 },
+  center: { opacity: 1, y: 0, scale: 1 },
+  exit: { opacity: 0, y: -10, scale: 0.99 },
+}
+
+function Sparkline({ days = [] }) {
+  const W = 760
+  const H = 190
+  const PAD = 18
   const max = Math.max(...days.map(d => d.revenue), 1)
   const step = (W - PAD * 2) / Math.max(days.length - 1, 1)
-  const points = days.map((d, i) => [
-    PAD + i * step,
-    H - PAD - ((d.revenue / max) * (H - PAD * 2)),
-  ])
-  const line = points.map(([x, y]) => `${x},${y}`).join(' ')
+  const pts = days.map((d, i) => [PAD + i * step, H - PAD - (d.revenue / max) * (H - PAD * 2)])
+  const line = pts.map(([x, y]) => `${x},${y}`).join(' ')
   const area = `${PAD},${H - PAD} ${line} ${W - PAD},${H - PAD}`
   return (
-    <div className="command-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Son 7 gun satis grafigi">
+    <div className="guided-chart">
+      <svg viewBox={`0 0 ${W} ${H}`}>
         <defs>
-          <linearGradient id="command-chart-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.24" />
-            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.02" />
+          <linearGradient id="guidedFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity=".2" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polygon points={area} fill="url(#command-chart-fill)" />
+        <polygon points={area} fill="url(#guidedFill)" />
         <polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        {points.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="4" fill="var(--accent)" />)}
+        {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="4" fill="var(--accent)" />)}
       </svg>
-      <div className="command-chart-days">
+      <div className="guided-chart-labels">
         {days.map(d => <span key={d.day}>{d.day.slice(5)}</span>)}
       </div>
     </div>
   )
 }
 
-function WelcomeHero({ tenant, user, stats }) {
-  const name = user?.full_name || user?.username || 'Yonetici'
-  const business = tenant?.business_name || user?.tenant?.business_name || 'Isletmeniz'
-  const risks = (stats?.stock?.critical_count || 0) + (stats?.cargo?.delayed_count || 0) + (stats?.tickets?.open || 0)
-  const mood = risks === 0 ? 'Her sey yolunda.' : `${risks} konu ilginizi bekliyor.`
-
+function StepShell({ children, step, setStep, totalSteps }) {
   return (
-    <section className="command-hero">
-      <div className="command-hero-copy">
-        <div className="command-eyebrow">Otomasyon merkezi</div>
-        <h1>Hos geldiniz, {name}.</h1>
-        <p>
-          {business} bugun sistem tarafindan izleniyor. Siparis, stok, kargo ve musteri taleplerinde
-          sadece mudahale gerektiren konulari one cikariyorum.
-        </p>
+    <div className="guided-shell">
+      <div className="guided-progress">
+        {Array.from({ length: totalSteps }).map((_, i) => (
+          <button
+            key={i}
+            className={`guided-dot${i === step ? ' active' : ''}${i < step ? ' done' : ''}`}
+            onClick={() => setStep(i)}
+            aria-label={`Adim ${i + 1}`}
+          />
+        ))}
       </div>
-      <div className="command-pulse-card">
-        <span className="pulse-dot" />
-        <div>
-          <strong>{mood}</strong>
-          <small>30 saniyede bir otomatik yenilenir</small>
-        </div>
+      <AnimatePresence mode="wait">
+        <motion.section
+          key={step}
+          variants={variants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {children}
+        </motion.section>
+      </AnimatePresence>
+      <div className="guided-nav">
+        <button className="guided-nav-btn" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>
+          Geri
+        </button>
+        <button className="guided-nav-btn primary" onClick={() => setStep(Math.min(totalSteps - 1, step + 1))}>
+          {step === totalSteps - 1 ? 'Akisi Basa Al' : 'Sonraki'}
+        </button>
       </div>
-    </section>
-  )
-}
-
-function AiTasksPanel() {
-  const [state, setState] = useState('loading')
-  const [payload, setPayload] = useState(null)
-  const [dismissed, setDismissed] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('dismissed_tasks') || '[]') } catch { return [] }
-  })
-
-  const load = () => {
-    setState('loading')
-    generateAiTasks()
-      .then(r => { setPayload(r); setState('ready') })
-      .catch(() => setState('error'))
-  }
-
-  useEffect(() => { load() }, [])
-
-  const tasks = (payload?.tasks || []).filter(t => !dismissed.includes(t.id))
-  const dismiss = (id) => {
-    const next = [...dismissed, id]
-    setDismissed(next)
-    sessionStorage.setItem('dismissed_tasks', JSON.stringify(next))
-  }
-
-  return (
-    <section className="command-panel command-panel-primary">
-      <div className="command-panel-head">
-        <div>
-          <span className="command-panel-kicker">AI yapilacaklar</span>
-          <h2>Bugun sistemi ne yonetiyor?</h2>
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={load}>Yenile</button>
-      </div>
-
-      {state === 'loading' && (
-        <div className="command-loading">
-          <span /><span /><span />
-          <b>AI oncelikleri hazirlaniyor</b>
-        </div>
-      )}
-
-      {state === 'error' && (
-        <div className="command-soft-alert">AI gorevleri yuklenemedi. Dashboard verileri yine izleniyor.</div>
-      )}
-
-      {state === 'ready' && (
-        <>
-          <p className="command-brief">{payload?.briefing || 'Bugun icin oncelikli konular hazir.'}</p>
-          {tasks.length === 0 ? (
-            <div className="command-done">Oncelikli acil aksiyon yok. Sistem izlemeye devam ediyor.</div>
-          ) : (
-            <div className="command-task-list">
-              {tasks.map(task => (
-                <article key={task.id} className={`command-task priority-${task.priority || 'normal'}`}>
-                  <div className="command-task-icon">{task.icon || '•'}</div>
-                  <div className="command-task-body">
-                    <h3>{task.title}</h3>
-                    <p>{task.body}</p>
-                  </div>
-                  <div className="command-task-actions">
-                    <Link className="btn btn-primary btn-sm" to={task.link || '/assistant'}>Incele</Link>
-                    <button className="btn btn-ghost btn-sm" onClick={() => dismiss(task.id)}>Ertele</button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  )
-}
-
-function MetricStrip({ stats }) {
-  const items = [
-    { label: 'Siparis', value: fmt(stats.orders.total), sub: fmtMoney(stats.orders.total_revenue) },
-    { label: 'Hazirlanacak', value: fmt(stats.orders.pending), sub: 'paket' },
-    { label: 'Riskli kargo', value: fmt(stats.cargo.delayed_count), sub: 'musteri beklemeden' },
-    { label: 'Kritik stok', value: fmt(stats.stock.critical_count), sub: 'yenileme' },
-    { label: 'Acil bilet', value: fmt(stats.tickets.open), sub: 'insan onayi' },
-  ]
-  return (
-    <div className="command-metrics">
-      {items.map(item => (
-        <div key={item.label} className="command-metric">
-          <span>{item.label}</span>
-          <strong>{item.value}</strong>
-          <small>{item.sub}</small>
-        </div>
-      ))}
     </div>
   )
 }
 
-function AttentionPanel({ stats, analytics }) {
-  const signals = [
-    ...(analytics?.risk_signals || []),
-    ...((stats.stock.critical_products || []).slice(0, 3).map(p => ({
-      title: `${p.name} yenileme bekliyor`,
-      body: `Stok ${p.stock_quantity}, esik ${p.low_stock_threshold}.`,
-      priority: 'high',
-      link: '/inventory',
-    }))),
-    ...((stats.cargo.delayed || []).slice(0, 2).map(c => ({
-      title: `Siparis #${c.id || c.order_id} kargo riski`,
-      body: `${c.customer_name} sikayet etmeden bilgilendirilebilir.`,
-      priority: 'high',
-      link: '/cargo',
-    }))),
-  ].slice(0, 6)
-
+function WelcomeStep({ user, tenant }) {
+  const business = tenant?.business_name || user?.tenant?.business_name || 'Isletmeniz'
+  const name = user?.full_name || user?.username || 'Mehmet Bey'
   return (
-    <section className="command-panel">
-      <div className="command-panel-head">
-        <div>
-          <span className="command-panel-kicker">Dikkat isteyenler</span>
-          <h2>Sadece mudahale gereken konular</h2>
-        </div>
+    <div className="guided-welcome">
+      <span className="guided-kicker">Otomasyon merkezi hazir</span>
+      <h1>Hos geldiniz, {name}.</h1>
+      <p>
+        {business} bugun arka planda izleniyor. Size tum veriyi yigmiyorum; sadece karar vermeniz
+        gereken anlari adim adim gosteriyorum.
+      </p>
+      <div className="guided-calm-line">
+        <span className="guided-live" /> Sistem siparis, stok, kargo ve musteri taleplerini izliyor.
       </div>
-      {signals.length === 0 ? (
-        <div className="command-done">Bugun icin kritik sinyal yok.</div>
-      ) : (
-        <div className="attention-list">
-          {signals.map((s, i) => (
-            <Link key={`${s.title}-${i}`} to={s.link || '/tickets'} className={`attention-item priority-${s.priority || 'normal'}`}>
-              <div>
-                <strong>{s.title}</strong>
-                <span>{s.body}</span>
-              </div>
-              <small>Incele →</small>
-            </Link>
-          ))}
-        </div>
-      )}
-    </section>
+    </div>
   )
 }
 
-function InsightPanel({ analytics }) {
-  const top = analytics?.top_products || []
-  const customers = analytics?.repeat_customers || []
+function TodayStep({ stats, chart, latestReport }) {
+  const days = chart?.days || []
+  const today = days[days.length - 1]
+  const yesterday = days[days.length - 2]
+  const change = yesterday?.revenue ? Math.round(((today.revenue - yesterday.revenue) / yesterday.revenue) * 100) : 0
+  const cards = [
+    { label: 'Bugunku satis', value: money(today?.revenue || 0), sub: `${change >= 0 ? '+' : ''}${change}% dune gore` },
+    { label: 'Gelen siparis', value: fmt(today?.order_count || 0), sub: `${fmt(stats.orders.total)} toplam kayit` },
+    { label: 'Hazirlanacak', value: fmt(stats.orders.pending), sub: 'paket bekliyor' },
+    { label: 'Acil sinyal', value: fmt(stats.stock.critical_count + stats.cargo.delayed_count + stats.tickets.open), sub: 'mudahale gerekebilir' },
+  ]
   return (
-    <section className="command-panel">
-      <div className="command-panel-head">
-        <div>
-          <span className="command-panel-kicker">IcGoru ve analiz</span>
-          <h2>Satis ve musteri sinyalleri</h2>
-        </div>
-        <Link className="btn btn-ghost btn-sm" to="/reports">Raporlar</Link>
-      </div>
-      <div className="insight-grid">
-        <div>
-          <h3>En hareketli urunler</h3>
-          {top.slice(0, 4).map(p => (
-            <div key={p.id} className="insight-row">
-              <span>{p.name}</span>
-              <strong>{p.sold_qty} adet</strong>
+    <div className="guided-step-grid">
+      <div className="guided-main-card">
+        <span className="guided-kicker">Bugun</span>
+        <h2>11 Mayis 2026</h2>
+        <div className="guided-metric-grid">
+          {cards.map(c => (
+            <div className="guided-metric" key={c.label}>
+              <span>{c.label}</span>
+              <strong>{c.value}</strong>
+              <small>{c.sub}</small>
             </div>
           ))}
         </div>
-        <div>
-          <h3>Tekrar eden musteriler</h3>
-          {customers.length === 0 ? (
-            <p className="muted">Henuz tekrar eden musteri sinyali yok.</p>
-          ) : customers.slice(0, 4).map(c => (
-            <div key={c.customer_phone} className="insight-row">
-              <span>{c.customer_name}</span>
-              <strong>{c.order_count} siparis</strong>
+        <Sparkline days={days} />
+      </div>
+      <aside className="guided-brief-card">
+        <span className="guided-kicker">AI brifingi</span>
+        <p>{latestReport?.report_text?.replace(/[#*_`]/g, '').slice(0, 520) || 'Bugunku rapor henuz uretilmedi. Sistem yine operasyon sinyallerini izliyor.'}</p>
+        <Link to="/reports" className="guided-link">Raporlara git →</Link>
+      </aside>
+    </div>
+  )
+}
+
+function OrdersStep({ stats }) {
+  const orders = stats.recent_orders || []
+  return (
+    <div className="guided-main-card">
+      <span className="guided-kicker">Hazirlanacak isler</span>
+      <h2>Paketler ve operasyon akisiniz</h2>
+      <p className="guided-muted">Once hazirlanacak siparisler, sonra kargo riski. Sistem musteri sormadan once sizi uyarir.</p>
+      <div className="guided-list">
+        {orders.slice(0, 5).map(o => (
+          <Link key={o.id} to="/orders" className="guided-row">
+            <div>
+              <strong>Siparis #{o.id} · {o.customer_name}</strong>
+              <span>{o.status} · {money(o.total_price)}</span>
             </div>
-          ))}
+            <small>Detay →</small>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ApprovalStep({ stats, analytics }) {
+  const tickets = stats.tickets.recent || []
+  const large = analytics?.large_orders || []
+  const repeat = analytics?.repeat_customers || []
+  return (
+    <div className="guided-step-grid">
+      <div className="guided-main-card">
+        <span className="guided-kicker">Onay bekleyenler</span>
+        <h2>Sadece karar gerektiren konular</h2>
+        <div className="guided-list">
+          {tickets.length === 0 && large.length === 0 ? (
+            <div className="guided-empty">Bugun onay bekleyen kritik konu yok.</div>
+          ) : (
+            <>
+              {tickets.slice(0, 4).map(t => (
+                <Link key={t.id} to="/tickets" className="guided-row urgent">
+                  <div><strong>{t.title}</strong><span>{t.type} · {t.priority}</span></div>
+                  <small>Incele →</small>
+                </Link>
+              ))}
+              {large.slice(0, 3).map(o => (
+                <Link key={o.id} to="/orders" className="guided-row">
+                  <div><strong>Yuklu siparis #{o.id}</strong><span>{o.customer_name} · {o.total_items} adet · {money(o.total_price)}</span></div>
+                  <small>Onayla →</small>
+                </Link>
+              ))}
+            </>
+          )}
         </div>
       </div>
-    </section>
+      <aside className="guided-brief-card">
+        <span className="guided-kicker">Musteri sinyali</span>
+        {repeat.length === 0 ? (
+          <p>Sadakat veya tekrar eden musteri sinyali henuz belirgin degil.</p>
+        ) : (
+          repeat.slice(0, 3).map(c => (
+            <div className="guided-mini-customer" key={c.customer_phone}>
+              <strong>{c.customer_name}</strong>
+              <span>{c.order_count} siparis · {money(c.revenue)}</span>
+            </div>
+          ))
+        )}
+      </aside>
+    </div>
+  )
+}
+
+function ActionsStep({ aiTasks }) {
+  const tasks = aiTasks?.tasks || []
+  return (
+    <div className="guided-main-card">
+      <span className="guided-kicker">AI aksiyonlari</span>
+      <h2>Uygulama bugun bunlari oneriyor</h2>
+      <p className="guided-muted">{aiTasks?.briefing || 'Oncelikli gorevler hazirlaniyor.'}</p>
+      <div className="guided-list">
+        {tasks.length === 0 ? (
+          <div className="guided-empty">Sistem izliyor; su an acil aksiyon yok.</div>
+        ) : tasks.map(t => (
+          <div key={t.id} className={`guided-action priority-${t.priority || 'normal'}`}>
+            <div>
+              <strong>{t.title}</strong>
+              <span>{t.body}</span>
+            </div>
+            <div className="guided-action-buttons">
+              <Link to={t.link || '/assistant'} className="guided-action-primary">Incele</Link>
+              <button>Ertele</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="guided-final-actions">
+        <Link to="/assistant" className="guided-big-link">AI Asistan ile islem yap</Link>
+        <Link to="/tickets" className="guided-big-link muted">Mudahale paneli</Link>
+      </div>
+    </div>
   )
 }
 
 export default function Overview() {
   const { user } = useAuth()
+  const [step, setStep] = useState(0)
   const [stats, setStats] = useState(null)
   const [chart, setChart] = useState(null)
   const [analytics, setAnalytics] = useState(null)
+  const [aiTasks, setAiTasks] = useState(null)
   const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
 
   const load = () => {
     Promise.all([getDashboardStats(), getSalesChart(), getAnalytics()])
@@ -259,10 +250,16 @@ export default function Overview() {
         setStats(s)
         setChart(c)
         setAnalytics(a)
-        setLastUpdated(new Date())
         setError(null)
       })
       .catch(e => setError(e.message))
+
+    generateAiTasks()
+      .then(setAiTasks)
+      .catch(() => setAiTasks({
+        briefing: 'AI gorevleri su an hazirlanamadi; operasyon verileri izleniyor.',
+        tasks: [],
+      }))
   }
 
   useEffect(() => {
@@ -271,53 +268,26 @@ export default function Overview() {
     return () => clearInterval(id)
   }, [])
 
-  const total7 = useMemo(
-    () => chart?.days?.reduce((sum, d) => sum + d.revenue, 0) || 0,
-    [chart],
-  )
+  const steps = useMemo(() => {
+    if (!stats) return []
+    return [
+      <WelcomeStep user={user} tenant={stats.tenant} />,
+      <TodayStep stats={stats} chart={chart} latestReport={stats.latest_report} />,
+      <OrdersStep stats={stats} />,
+      <ApprovalStep stats={stats} analytics={analytics} />,
+      <ActionsStep aiTasks={aiTasks} />,
+    ]
+  }, [stats, chart, analytics, aiTasks, user])
 
   if (!stats && error) return <div className="error-msg">Sunucuya baglanilamiyor: {error}</div>
-  if (!stats) return <div className="spinner" />
+  if (!stats) return <div className="guided-loading">Isletmeniz hazirlaniyor<span /><span /><span /></div>
 
   return (
-    <div className="command-center">
-      {error && <div className="command-soft-alert">Veriler yenilenemedi; son bilinen durum gosteriliyor.</div>}
-
-      <WelcomeHero tenant={stats.tenant} user={user} stats={stats} />
-      <MetricStrip stats={stats} />
-
-      <div className="command-main-grid">
-        <div className="command-main-column">
-          <AiTasksPanel />
-          <AttentionPanel stats={stats} analytics={analytics} />
-        </div>
-        <aside className="command-side-column">
-          <section className="command-panel">
-            <div className="command-panel-head">
-              <div>
-                <span className="command-panel-kicker">Son 7 gun</span>
-                <h2>{fmtMoney(total7)} satis</h2>
-              </div>
-            </div>
-            <MiniSparkline days={chart?.days || []} />
-          </section>
-          <InsightPanel analytics={analytics} />
-        </aside>
-      </div>
-
-      {stats.latest_report && (
-        <section className="command-panel command-report-strip">
-          <div>
-            <span className="command-panel-kicker">AI sabah brifingi</span>
-            <p>{stats.latest_report.report_text?.replace(/[#*_`]/g, '').slice(0, 260)}...</p>
-          </div>
-          <Link className="btn btn-primary btn-sm" to="/reports">Tam rapor</Link>
-        </section>
-      )}
-
-      {lastUpdated && (
-        <div className="command-updated">Son guncelleme: {lastUpdated.toLocaleTimeString('tr-TR')} · sistem izliyor</div>
-      )}
+    <div className="guided-page">
+      {error && <div className="guided-soft-error">Veriler yenilenemedi; son bilinen durum gosteriliyor.</div>}
+      <StepShell step={step} setStep={setStep} totalSteps={steps.length}>
+        {steps[step]}
+      </StepShell>
     </div>
   )
 }

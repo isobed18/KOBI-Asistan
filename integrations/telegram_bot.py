@@ -25,9 +25,11 @@ from agent.auth import (
     validate_tracking_code,
 )
 from agent.intent_classifier import classify, fast_response, IntentResult
+from integrations.channels.telegram_adapter import TelegramAdapter
 from config import settings
 
 telegram_app = None
+adapter = TelegramAdapter()
 
 # ---------------------------------------------------------------------------
 # Durum Sabitleri
@@ -85,7 +87,8 @@ MENU_KB = InlineKeyboardMarkup([
 BACK_KB = InlineKeyboardMarkup([[InlineKeyboardButton("Ana Menu", callback_data="back_menu")]])
 
 def _sess(update: Update) -> str:
-    return f"tg_{update.effective_chat.id}"
+    inbound = adapter.parse_update(update)
+    return f"tg_{inbound.channel_user_id}"
 
 def _ud(context) -> dict:
     d = context.user_data
@@ -134,10 +137,16 @@ async def _fast(update, context, intent: str, params: dict):
 
 async def _llm(update, context, text: str):
     sess = _sess(update)
+    inbound = adapter.parse_update(update)
     try:
         result = agent_graph.invoke(
-            {"messages": [HumanMessage(content=text)]},
-            config={"configurable": {"thread_id": sess}},
+            {
+                "messages": [HumanMessage(content=text)],
+                "tenant_id": inbound.tenant_id,
+                "channel": inbound.channel,
+                "channel_user_id": inbound.channel_user_id,
+            },
+            config={"configurable": {"thread_id": sess, "tenant_id": inbound.tenant_id}},
         )
         resp = result["messages"][-1].content
         if len(resp) > 4000:

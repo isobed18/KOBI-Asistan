@@ -12,9 +12,49 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 import json
+from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
 TENANTS_DIR = ROOT / "tenants"
+
+
+class AgentConfig(BaseModel):
+    name: str = "Kobi"
+    role: str = "Operasyon Asistani"
+    personality: str = "Sakin, pratik ve aksiyon odakli bir KOBI asistanisin."
+    rules: list[str] = Field(default_factory=list)
+
+
+class LLMConfig(BaseModel):
+    provider: str = "ollama"
+    model: str = "qwen3.6:27b"
+    temperature: float = 0.2
+    max_tokens: int = 1024
+
+
+class FeaturesConfig(BaseModel):
+    dashboard_theme: str = "elegant"
+    whatsapp_business: bool = False
+    telegram_admin_notifications: bool = True
+    faq_rag: bool = False
+    report_export: bool = False
+
+
+class BrandingConfig(BaseModel):
+    primary_color: str = "#2563eb"
+    accent_color: str = "#16a34a"
+
+
+class TenantConfig(BaseModel):
+    tenant_id: int = 1
+    slug: str = "default"
+    business_name: str = "KOBI Asistan"
+    business_type: str = "kobi"
+    language: str = "tr"
+    agent: AgentConfig = Field(default_factory=AgentConfig)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    features: FeaturesConfig = Field(default_factory=FeaturesConfig)
+    branding: BrandingConfig = Field(default_factory=BrandingConfig)
 
 
 def _simple_yaml(text: str) -> dict[str, Any]:
@@ -78,21 +118,16 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=64)
-def get_tenant_config(slug: str = "default") -> dict[str, Any]:
+def get_tenant_config(slug: str = "default") -> TenantConfig:
     path = TENANTS_DIR / slug / "config.yaml"
     if not path.exists():
         path = TENANTS_DIR / "default" / "config.yaml"
     data = _load_yaml(path)
-    data.setdefault("tenant_id", 1)
     data.setdefault("slug", slug)
-    data.setdefault("business_name", "KOBI Asistan")
-    data.setdefault("agent", {})
-    data.setdefault("features", {})
-    data.setdefault("branding", {})
-    return data
+    return TenantConfig(**data)
 
 
-def get_tenant_by_id(tenant_id: int | None) -> dict[str, Any]:
+def get_tenant_by_id(tenant_id: int | None) -> TenantConfig:
     tid = int(tenant_id or 1)
     for path in TENANTS_DIR.glob("*/config.yaml"):
         data = _load_yaml(path)
@@ -105,31 +140,30 @@ def get_tenant_by_id(tenant_id: int | None) -> dict[str, Any]:
 def tenant_public_payload(tenant_id: int | None = 1) -> dict[str, Any]:
     cfg = get_tenant_by_id(tenant_id)
     return {
-        "tenant_id": cfg.get("tenant_id", 1),
-        "slug": cfg.get("slug", "default"),
-        "business_name": cfg.get("business_name", "KOBI Asistan"),
-        "business_type": cfg.get("business_type", "kobi"),
-        "language": cfg.get("language", "tr"),
-        "agent_name": cfg.get("agent", {}).get("name", "Kobi"),
-        "features": cfg.get("features", {}),
-        "branding": cfg.get("branding", {}),
+        "tenant_id": cfg.tenant_id,
+        "slug": cfg.slug,
+        "business_name": cfg.business_name,
+        "business_type": cfg.business_type,
+        "language": cfg.language,
+        "agent_name": cfg.agent.name,
+        "features": cfg.features.model_dump(),
+        "branding": cfg.branding.model_dump(),
     }
 
 
 def tenant_prompt_block(tenant_id: int | None = 1) -> str:
     cfg = get_tenant_by_id(tenant_id)
-    agent = cfg.get("agent", {})
-    rules = agent.get("rules", [])
-    rules_text = "\n".join(f"- {r}" for r in rules) if isinstance(rules, list) else str(rules)
+    agent = cfg.agent
+    rules_text = "\n".join(f"- {r}" for r in agent.rules)
     return (
-        f"Isletme: {cfg.get('business_name')}\n"
-        f"Isletme tipi: {cfg.get('business_type')}\n"
-        f"Asistan adi: {agent.get('name', 'Kobi')}\n"
-        f"Asistan rolu: {agent.get('role', 'Operasyon Asistani')}\n"
-        f"Kisilik:\n{agent.get('personality', '')}\n"
+        f"Isletme: {cfg.business_name}\n"
+        f"Isletme tipi: {cfg.business_type}\n"
+        f"Asistan adi: {agent.name}\n"
+        f"Asistan rolu: {agent.role}\n"
+        f"Kisilik:\n{agent.personality}\n"
         f"Isletme kurallari:\n{rules_text}"
     )
 
 
 def dump_config_debug(tenant_id: int | None = 1) -> str:
-    return json.dumps(get_tenant_by_id(tenant_id), ensure_ascii=False, indent=2)
+    return json.dumps(get_tenant_by_id(tenant_id).model_dump(), ensure_ascii=False, indent=2)
