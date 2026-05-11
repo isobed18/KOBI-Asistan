@@ -1,246 +1,201 @@
-# KOBİ Asistan — AI-Powered Business Assistant
+# KOBİ Asistan — AI-Powered SME Operations Platform
 
-<div align="center">
-
-**KOBİ'ler için yapay zeka destekli sipariş, stok ve kargo yönetim asistanı**
-
-*LangGraph + Ollama + FastAPI + Telegram*
-
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![LangGraph](https://img.shields.io/badge/LangGraph-1.1+-1C3C3C?style=flat-square&logo=langchain&logoColor=white)](https://github.com/langchain-ai/langgraph)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-black?style=flat-square)](https://ollama.ai)
-
-</div>
+> **v4.0** · LangGraph + FastAPI + React Dashboard + Telegram Bot  
+> Küçük işletmeler için sipariş, stok ve kargo yönetimini otomatize eden, gerçek maliyetle tasarlanmış AI asistan.
 
 ---
 
-## Demo
+## Ekran Görüntüleri
 
-### Web Chat UI — Multi-Step Tool Calling
+### Genel Bakış (Overview)
+![Genel Bakış](docs/screenshots/genel_bakis.png)
 
-![KOBİ Asistan Chat UI](docs/screenshots/chat_ui_demo.png)
+### Sipariş Yönetimi
+![Siparişler](docs/screenshots/siparisler.png)
+![Sipariş Detay](docs/screenshots/siparis_detay.png)
 
-> Agent, müşterinin "2 numaralı siparişim nerede?" sorusuna yanıt verirken önce `siparis_sorgula` tool'unu çağırıyor, kargo kodu bulunca otomatik olarak `kargo_takip` tool'unu da çağırıyor (multi-step reasoning). Tool çağrıları arayüzde şeffaf şekilde gösteriliyor.
+### Kargo Takibi
+![Kargo](docs/screenshots/kargo.png)
 
----
+### Stok & Envanter
+![Stok](docs/screenshots/stock.png)
 
-## Özellikler
+### İnsan İncelemesi — Biletler
+![Biletler](docs/screenshots/tickets.png)
 
-### AI Agent Yetenekleri
-- **Sipariş sorgulama** — Sipariş no veya takip kodu (SIP-XXXXXX) ile detaylı sipariş bilgisi
-- **Stok kontrolü** — Ürün adıyla arama, fiyat ve stok durumu
-- **Kargo takibi** — Otomatik kargo kodu algılama ve durum sorgulama
-- **Kritik stok uyarısı** — Eşik altındaki ürünlerin listesi
-- **Günlük operasyonel özet** — Sipariş, gelir ve stok durumu raporu
-- **Müşteri siparişleri** — Telefon numarasına bağlı tüm siparişler
+### AI Günlük Rapor
+![AI Rapor](docs/screenshots/ai_rapor.png)
+![AI Rapor Oluşturuldu](docs/screenshots/ai_rapor_after_creation.png)
 
-### Güvenlik
-- **3 katmanlı Prompt Police** — Injection, yasaklı konu ve konu uygunluğu kontrolü (0 maliyet, 0 latency)
-- **Kod seviyesi müşteri auth** — Telefon veya takip kodu ile doğrulama, agent tool kullanımı scope ile kısıtlı
-- **contextvars tabanlı scope** — Async-safe, per-request yetki izolasyonu
+### Telegram Bot
+![Telegram LLM Bypass](docs/screenshots/telegram_siparistakip_llmbypassed.png)
+![Telegram AI Yanıt](docs/screenshots/telegram_redeem_ai_response.png)
 
-### Otomasyon (APScheduler)
-- **Sabah raporu** — Her gün 08:00'de günlük özet + kritik stok
-- **Stok alarmı** — 2 saatte bir kritik stok kontrolü
-- **Kargo gecikme kontrolü** — 4 saatte bir kargodaki siparişlerin gecikme tespiti
-
-### Entegrasyonlar
-- **Web Chat UI** — Dark mode, SSE streaming, tool call görselleştirme
-- **Telegram Bot** — Aynı process içinde async, auth-aware
-- **REST API** — FastAPI + Swagger docs
+### Web Chat + Telegram'dan Oluşan Bilet
+![Chat UI](docs/screenshots/chat_ui_demo.png)
+![Telegram'dan Bilet](docs/screenshots/web_ticket_created_after_telegram_redeem.png)
 
 ---
 
 ## Mimari
 
 ```
-                    ┌─────────────────────┐
-                    │   Müşteri Mesajı     │
-                    └──────────┬──────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │   Prompt Police     │  ← 3 katman (regex, 0 maliyet)
-                    │   (guard.py)        │
-                    └──────────┬──────────┘
-                               │
-                    ┌──────────▼──────────┐
-                    │   Auth Middleware   │  ← Telefon / SIP-XXXXXX
-                    │   (auth.py)        │
-                    └──────────┬──────────┘
-                               │
-           ┌───────────────────▼───────────────────┐
-           │         LangGraph StateGraph          │
-           │                                       │
-           │   START → [Agent Node] ⇄ [Tools] → END│
-           │       ↕                    ↕          │
-           │   System Prompt       6 Tool          │
-           │   (auth-aware)                        │
-           └───────────────────────────────────────┘
-                    ↑                        ↑
-      ┌─────────────┴──────┐    ┌────────────┴──────────────┐
-      │  Channel Layer     │    │       Tool Registry        │
-      │  • Web (SSE)       │    │  • siparis_sorgula         │
-      │  • Telegram Bot    │    │  • musteri_siparisleri     │
-      │  • REST API        │    │  • urun_stok_kontrol      │
-      └────────────────────┘    │  • kritik_stok_listesi    │
-                                │  • gunluk_ozet            │
-      ┌─────────────────────┐   │  • kargo_takip            │
-      │  APScheduler        │   └───────────────────────────┘
-      │  • Sabah raporu     │            ↓
-      │  • Stok alarm       │   ┌────────────────┐
-      │  • Kargo kontrol    │   │  SQLite + Scope│
-      └─────────────────────┘   └────────────────┘
+Müşteri (Telegram / Web Chat)
+        │
+        ▼
+  ┌─────────────────────────────────────────────────┐
+  │  3-Layer Prompt Police (regex, sıfır gecikme)   │
+  └──────────────────────┬──────────────────────────┘
+                         │ güvenli
+                         ▼
+  ┌─────────────────────────────────────────────────┐
+  │  Auth Middleware (contextvars scope)             │
+  │  telefon / SIP-XXXXXX doğrulama                 │
+  └──────────────────────┬──────────────────────────┘
+                         │
+               ┌─────────┴─────────┐
+               │ Intent Classifier │  ← %70-80 sorgu LLM'siz
+               │ (regex + cache)   │     ~100ms, sıfır maliyet
+               └────────┬──────────┘
+           ┌────────────┴─────────────┐
+    bypass │                          │ LLM gerekli
+           ▼                          ▼
+  ┌──────────────────┐    ┌──────────────────────────────────┐
+  │ Direkt Tool Call │    │  LangGraph StateGraph (ReAct)     │
+  │ + Template yanıt │    │  agent ↔ tools (sipariş/stok/    │
+  └──────────────────┘    │  kargo/bilet oluşturma)          │
+                          └──────────────────────────────────┘
+                                       │
+                         ┌─────────────┴──────────────────────┐
+                         │  APScheduler (Arka Plan Görevler)  │
+                         │  08:00 → Sabah raporu (LLM)        │
+                         │  2sa   → Kritik stok + LLM bilet   │
+                         │  4sa   → Kargo tarama + template   │
+                         └─────────────┬──────────────────────┘
+                                       │
+                         ┌─────────────▼──────────────────────┐
+                         │  React Dashboard (Vite, dark)      │
+                         │  30s otomatik yenileme             │
+                         └────────────────────────────────────┘
 ```
+
+### LLM Maliyet Optimizasyonu
+
+| Senaryo | LLM | Yöntem |
+|---|---|---|
+| Basit sorgu (sipariş, stok, kargo) | Hayır | Intent Classifier → Direkt Tool |
+| Kargo gecikme müşteri mesajı | Hayır | Template (sıfır maliyet) |
+| Müşteri iptal / şikayet talebi | Evet | LangGraph ReAct + create_ticket |
+| Kritik stok → tedarikçi emaili | Evet | LLM (düşük frekans, yüksek değer) |
+| Sabah raporu + açık biletler | Evet | Scheduled, günde bir kez |
+| On-demand rapor | Evet | Dashboard butonu |
 
 ---
 
-## Tech Stack
+## Özellikler
 
-| Katman | Teknoloji |
-|--------|-----------|
-| AI Agent | LangGraph (StateGraph + ToolNode) |
-| LLM | **Ollama** (local) / **OpenAI** / **Google Gemini** / **Anthropic Claude** |
-| Backend | FastAPI + Uvicorn |
-| Database | SQLite |
-| Auth | contextvars (async-safe per-request scope) |
-| Security | 3-layer Prompt Police (regex, 0 cost) |
-| Scheduler | APScheduler (AsyncIOScheduler) |
-| Telegram | python-telegram-bot (async) |
-| Config | Pydantic Settings + python-dotenv |
+### Müşteri Tarafı
+- **Telegram Bot** — İnteraktif InlineKeyboard menüsü, state machine (6 durum), rate limiting (10/dk, 40/sa)
+- **Web Chat API** — SSE stream desteği, session tabanlı
+- **Auth** — Telefon (05XXXXXXXXX) veya takip kodu (SIP-XXXXXX) ile kimlik doğrulama; contextvars ile async-safe scope
+- **Prompt Police** — 3 katmanlı regex guardrail (prompt injection, kişisel veri sızıntısı, kötü niyetli içerik)
+- **Intent Classifier** — Regex tabanlı, 5 dakika response cache, LLM bypass
 
-### Desteklenen LLM Provider'lar
+### Yönetici Tarafı (Dashboard)
+- **Overview** — KPI kartları, sipariş dağılımı, kargo uyarıları, son biletler; 30s otomatik yenileme
+- **Orders** — Filtrelenebilir tablo + detay drawer; durum güncelleme + kargo kodu atama
+- **Cargo** — Renk kodlu gecikme takibi; "Bilet Aç" tek tıkla
+- **Inventory** — Stok progress bar'ları; güncelleme + hareket geçmişi modalı (tab'lı)
+- **Tickets** — Human-in-the-loop inceleme; LLM içeriği expand (kargo → müşteri mesajı kopyala; stok → tedarikçi emaili kopyala)
+- **Reports** — Markdown AI raporu (açık biletler dahil); on-demand oluşturma + geçmiş
 
-| Provider | Model Örnekleri | API Key Gerekli | Local |
-|----------|----------------|-----------------|-------|
-| **Ollama** | Qwen3.6:27b, Gemma4:26b, Llama3 | ❌ Hayır | ✅ Tamamen offline |
-| **OpenAI** | gpt-4o, gpt-4o-mini, gpt-3.5-turbo | ✅ `OPENAI_API_KEY` | ❌ Cloud |
-| **Google Gemini** | gemini-2.0-flash, gemini-pro | ✅ `GOOGLE_API_KEY` | ❌ Cloud |
-| **Anthropic Claude** | claude-sonnet-4-20250514, claude-haiku | ✅ `ANTHROPIC_API_KEY` | ❌ Cloud |
-
----
-
-## Test Sonuçları
-
-Tüm senaryolar başarıyla geçildi:
-
-| # | Senaryo | Sonuç |
-|---|---------|-------|
-| 1 | Unrestricted sipariş sorgusu + kargo takibi | ✅ 2 tool çağrıldı (multi-step) |
-| 2 | Telefon auth + **yetkisiz** başka müşteri siparişi | ✅ Reddedildi |
-| 3 | Telefon auth + **yetkili** kendi siparişi | ✅ Gösterildi |
-| 4 | Takip kodu auth (SIP-MD3R45) | ✅ Doğrudan erişim |
-| 5 | Prompt injection ("Ignore all previous...") | ✅ Bloklandı |
-| 6 | Off-topic mesaj (Python yazma isteği) | ✅ Bloklandı |
-| 7 | Stok kontrolü ("Zeytinyağı var mı?") | ✅ Tool çağrıldı |
-| 8 | Günlük özet + kritik stok (paralel tool) | ✅ 2 tool paralel |
-
-### Örnek: Yetkisiz Erişim Bloklama
-
-```
-Mesaj: "2 numaralı siparişim nerede?"
-Auth: telefon=05321234567 (Ayşe Kaya)
-Sipariş #2: Mehmet Demir'e ait
-
-Agent Yanıt: "2 numaralı siparişe erişim yetkim bulunmuyor,
-çünkü bu sipariş doğrulanmış telefon numaranıza ait değil."
-```
+### Otomasyon
+- **Sabah Raporu** (08:00) — Tüm KPI'lar + açık biletler dahil LLM analiz, aksiyon listesi
+- **Stok Alarmı** (2sa) — Kritik ürün başına günde bir bilet; LLM tedarikçi emaili
+- **Kargo Gecikmesi** (4sa) — Sipariş başına günde bir bilet; template müşteri mesajı (LLM maliyetsiz)
 
 ---
 
 ## Kurulum
 
-### Gereksinimler
-- Python 3.11+
-- Aşağıdaki LLM seçeneklerinden **en az biri:**
-  - [Ollama](https://ollama.ai) (local, ücretsiz) + bir model (`ollama pull qwen3.6:27b`)
-  - OpenAI API Key
-  - Google Gemini API Key
-  - Anthropic Claude API Key
-
-### Adımlar
-
 ```bash
-# 1. Repoyu klonla
-git clone https://github.com/Serkan0YLDZ/YZTA_Hackathon.git
-cd YZTA_Hackathon
-git checkout ai-agent
-
-# 2. Virtual environment
+git clone <repo>
+cd kobi_asistan
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-.\venv\Scripts\activate   # Windows
-
-# 3. Bağımlılıklar
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# 4. Ortam değişkenleri
-cp .env.example .env
 ```
 
-### LLM Provider Seçimi
+### .env
 
-`.env` dosyasında `LLM_PROVIDER` değişkenini ayarlayın:
-
-**Seçenek A: Ollama (Local — ücretsiz, internet gereksiz)**
 ```env
+# LLM (default: ollama)
 LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen2.5:7b
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3.6:27b
-```
-> Ollama'nın çalıştığından emin olun: `ollama serve`
 
-**Seçenek B: OpenAI**
-```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-```
+# Veya OpenAI
+# LLM_PROVIDER=openai
+# OPENAI_API_KEY=sk-...
+# OPENAI_MODEL=gpt-4o-mini
 
-**Seçenek C: Google Gemini**
-```env
-LLM_PROVIDER=gemini
-GOOGLE_API_KEY=AIza...
-GEMINI_MODEL=gemini-2.0-flash
-```
+# Veya Anthropic
+# LLM_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 
-**Seçenek D: Anthropic Claude**
-```env
-LLM_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...
-CLAUDE_MODEL=claude-sonnet-4-20250514
+# Veya Gemini
+# LLM_PROVIDER=gemini
+# GEMINI_API_KEY=...
+# GEMINI_MODEL=gemini-1.5-flash
+
+# Telegram (opsiyonel)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ENABLED=false
 ```
 
-### Sunucuyu Başlat
+### Backend
 
 ```bash
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --port 8000
 ```
 
-### Erişim Noktaları
-- **Chat UI:** http://localhost:8000/static/index.html
-- **API Docs:** http://localhost:8000/docs
-- **Bildirimler:** http://localhost:8000/api/v1/notifications
+### Dashboard (geliştirme)
+
+```bash
+cd dashboard
+npm install
+npm run dev
+# http://localhost:5173
+```
+
+### Dashboard (prodüksiyon)
+
+```bash
+cd dashboard
+npm run build
+# Çıktı → ../static/dashboard/
+```
 
 ---
 
-## API
+## API Endpoints
 
-### POST /api/v1/chat
-```json
-{
-  "mesaj": "SIP-MD3R45 kodlu siparişim nerede?",
-  "session_id": "optional-session-id",
-  "telefon": "05334567890",
-  "takip_kodu": "SIP-MD3R45"
-}
-```
-
-### POST /api/v1/chat/stream
-Aynı body, SSE streaming yanıt.
-
-### GET /api/v1/notifications
-APScheduler bildirim kuyruğu.
+| Method | Endpoint | Açıklama |
+|---|---|---|
+| POST | `/api/v1/chat` | Senkron AI yanıt |
+| POST | `/api/v1/chat/stream` | SSE stream yanıt |
+| GET | `/api/v1/notifications` | Scheduler bildirimleri |
+| GET | `/dashboard/stats` | Genel bakış KPI |
+| GET | `/dashboard/cargo` | Kargo durumu |
+| GET/POST | `/tickets/` | Bilet listesi / oluştur |
+| PATCH | `/tickets/{id}/status` | Bilet durum güncelle |
+| GET | `/tickets/stats/summary` | Bilet istatistikleri |
+| POST | `/reports/generate` | AI rapor oluştur |
+| GET | `/reports/` | Rapor listesi |
+| GET | `/reports/latest/today` | Bugünkü son rapor |
+| GET | `/products/{id}/movements` | Stok hareket geçmişi |
+| PATCH | `/products/{id}/stock` | Stok güncelle |
 
 ---
 
@@ -248,67 +203,118 @@ APScheduler bildirim kuyruğu.
 
 ```
 kobi_asistan/
-├── main.py                     # FastAPI app + lifespan
-├── config.py                   # Pydantic Settings
-├── .env.example                # Ortam değişkenleri şablonu
-├── requirements.txt
-│
+├── main.py                     # FastAPI app, lifespan
+├── config.py                   # Pydantic settings, multi-provider LLM
 ├── agent/
-│   ├── graph.py                # LangGraph agent (auth-aware)
-│   ├── prompt.py               # System prompts
-│   ├── guard.py                # Prompt Police (3 katman)
-│   ├── auth.py                 # Müşteri auth & scope
-│   └── scheduler.py            # APScheduler (3 görev)
-│
+│   ├── graph.py                # LangGraph StateGraph
+│   ├── auth.py                 # contextvars session scoping
+│   ├── guard.py                # Prompt Police
+│   ├── intent_classifier.py   # Regex classifier + response cache
+│   ├── llm_service.py         # LLM factory + rapor/bilet üretimi
+│   ├── prompt.py              # System prompt
+│   └── scheduler.py           # APScheduler görevleri
 ├── tools/
-│   ├── order_product_tools.py  # Sipariş/stok/özet tools
-│   └── kargo_tools.py          # Kargo takip tool
-│
+│   ├── order_product_tools.py # Sipariş, stok, bilet tools
+│   └── kargo_tools.py         # Kargo takip tools
 ├── routers/
-│   ├── chat.py                 # Chat API (auth + police + SSE)
-│   ├── orders.py               # Sipariş CRUD
-│   └── products.py             # Ürün CRUD
-│
-├── integrations/
-│   └── telegram_bot.py         # Telegram bot
-│
+│   ├── chat.py                # /api/v1/chat + stream
+│   ├── dashboard.py           # /dashboard/ endpoints
+│   ├── tickets.py             # /tickets/ CRUD
+│   ├── reports.py             # /reports/ + AI generation
+│   ├── orders.py              # /orders/ CRUD
+│   └── products.py            # /products/ CRUD + movements
 ├── database/
-│   ├── db.py                   # SQLite schema
-│   ├── seed.py                 # Demo verisi
-│   └── schemas.py              # Pydantic models
-│
-├── static/
-│   └── index.html              # Web Chat UI
-│
+│   ├── db.py                  # SQLite init (7 tablo)
+│   ├── schemas.py             # Pydantic modeller
+│   └── seed.py                # Demo veri
+├── integrations/
+│   └── telegram_bot.py        # PTB bot, state machine
+├── dashboard/                  # React + Vite
+│   └── src/
+│       ├── pages/             # 6 sayfa
+│       ├── components/        # Layout, KPICard, StatusBadge
+│       └── api.js             # API sarmalayıcılar
 └── docs/
-    ├── screenshots/            # Demo görselleri
-    └── RESEARCH.md             # Araştırma raporu
+    ├── screenshots/
+    ├── revive.md              # AI ajans onboarding
+    └── grok_report.txt
 ```
 
 ---
 
-## Araştırma & Gelecek Planlar
+## Veritabanı Tabloları
 
-Detaylı araştırma raporu için bkz: [docs/RESEARCH.md](docs/RESEARCH.md)
-
-### Kısa Vadeli
-- [ ] Intent classifier ile LLM bypass (basit sorularda ~100ms yanıt)
-- [ ] Response cache (aynı sorularda 0 maliyet)
-- [ ] NeMo Guardrails entegrasyonu (Ollama ile offline)
-
-### Orta Vadeli
-- [ ] FAQ RAG sistemi (vektör DB, sık sorulan sorular)
-- [ ] Lightweight model geçişi (Qwen2.5:7B)
-- [ ] WhatsApp entegrasyonu
-
-### Uzun Vadeli
-- [ ] Fine-tuned intent classifier (BERT/DistilBERT)
-- [ ] Multi-tenant YAML config (çoklu işletme desteği)
-- [ ] vLLM geçişi (production)
-- [ ] Docker Compose deployment
+| Tablo | Açıklama |
+|---|---|
+| `products` | Ürünler (tenant_id hazır) |
+| `orders` | Siparişler (tenant_id hazır) |
+| `order_items` | Sipariş kalemleri |
+| `cargo_tracking` | Kargo kayıtları |
+| `tickets` | Human-in-the-loop biletleri (llm_content JSON, tenant_id hazır) |
+| `daily_reports` | LLM sabah raporları |
+| `stock_movements` | Stok hareket logu (delta, önce/sonra) |
 
 ---
 
-## Lisans
+## Öncelik Sırasına Göre Sonraki Hedefler
 
-MIT
+### 🔴 Yüksek Öncelik
+
+1. **Auth Güçlendirme — Sipariş İptal OTP Doğrulaması**  
+   Şu anki auth telefon/takip kodu eşleşmesiyle çalışıyor. İptal gibi geri dönüşü olmayan aksiyonlar için ek doğrulama gerekli:
+   - Telegram üzerinden doğrulama kodu (siparişteki kayıtlı numaraya bot mesajı)
+   - SMS OTP (Twilio / Netgsm)
+   - E-posta doğrulama bağlantısı
+   - Yalnızca OTP eşleşmesinden sonra iptal ticket'ı oluşturulsun
+
+2. **Ticket → Anlık Yönetici Bildirimi**  
+   Kritik bilet açıldığında Telegram yönetici chat'ine bildirim gönder; şu an biletler sadece dashboard'da görünüyor.
+
+3. **Sipariş Tamamlanınca Stok Düşürmesi**  
+   Agent sipariş tamamladığında `stock_movements` tablosuna otomatik log.
+
+### 🟡 Orta Öncelik
+
+4. **Analitik & Grafik Sayfası** (Task 6)  
+   Satış trendi, ürün performansı, haftalık LLM içgörüsü; Recharts ile.
+
+5. **FAQ / RAG**  
+   "İade koşulları nedir?" gibi tekrarlayan sorular için ChromaDB + statik fallback.
+
+6. **Tedarikçi Email Gönderimi**  
+   Stok biletindeki email taslağını yönetici onayladıktan sonra gerçekten SMTP ile gönder.
+
+7. **Rapor Export**  
+   PDF / Excel (WeasyPrint / openpyxl).
+
+### 🟢 Uzun Vadeli
+
+8. **WhatsApp Business API**  
+   Telegram'a ek müşteri kanalı. Açılan bilet, ilgili müşterinin WhatsApp sohbetine mesaj atmalı — Human-in-the-loop takibi WhatsApp thread'inde yürüsün.
+
+9. **Multi-Tenant**  
+   Tüm kritik tablolarda `tenant_id DEFAULT 1` hazır. Gerçek multi-tenant:
+   - YAML/DB bazlı tenant config
+   - Row-level security veya ayrı şema
+
+10. **vLLM / Faster Inference**  
+    Lokal deployment için Ollama yerine vLLM (batched, düşük gecikme).
+
+11. **NeMo Guardrails (Output Rails)**  
+    Input zaten regex ile korunuyor. Gelecekte LLM çıktısı için output rails — şu an 500ms overhead nedeniyle ertelendi.
+
+---
+
+## Teknoloji Yığını
+
+| Katman | Teknoloji |
+|---|---|
+| Backend | FastAPI + Uvicorn |
+| AI Framework | LangGraph (StateGraph, ToolNode) |
+| LLM | Ollama (lokal) / OpenAI / Anthropic / Gemini |
+| Veritabanı | SQLite (kobi.db) |
+| Zamanlayıcı | APScheduler (AsyncIOScheduler) |
+| Telegram | python-telegram-bot v21 |
+| Frontend | React 18 + Vite + react-router-dom v6 |
+| Auth | contextvars (async-safe) |
+| Güvenlik | Regex Prompt Police (3 katman) |

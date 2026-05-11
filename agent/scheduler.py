@@ -92,10 +92,20 @@ async def sabah_raporu():
         """).fetchall()
         conn.close()
 
+        conn2 = get_connection()
+        open_tickets = conn2.cursor().execute("""
+            SELECT id, type, priority, title, created_at
+            FROM tickets
+            WHERE status != 'resolved'
+            ORDER BY priority DESC, created_at ASC
+        """).fetchall()
+        conn2.close()
+
         raw_data = {
             "ozet": ozet,
             "kritik_stok": kritik,
             "kargo_gecikmeleri": [dict(r) for r in cargo_delays],
+            "acik_biletler": [dict(r) for r in open_tickets],
             "rapor_tarihi": date.today().isoformat(),
         }
 

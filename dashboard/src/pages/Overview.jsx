@@ -15,7 +15,7 @@ export default function Overview() {
 
   const load = () =>
     getDashboardStats()
-      .then(d => { setData(d); setLastUpdated(new Date()) })
+      .then(d => { setData(d); setLastUpdated(new Date()); setError(null) })
       .catch(e => setError(e.message))
 
   useEffect(() => {
@@ -24,8 +24,8 @@ export default function Overview() {
     return () => clearInterval(id)
   }, [])
 
-  if (error) return <div className="error-msg">⚠️ {error}</div>
-  if (!data)  return <div className="spinner" />
+  if (!data && error) return <div className="error-msg">⚠️ Sunucuya bağlanılamıyor: {error}</div>
+  if (!data)          return <div className="spinner" />
 
   const { orders, stock, cargo, tickets, recent_orders, latest_report } = data
 
@@ -35,6 +35,11 @@ export default function Overview() {
 
   return (
     <>
+      {error && (
+        <div style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 'var(--radius)', padding: '8px 14px', marginBottom: 12, fontSize: 13, color: 'var(--danger)' }}>
+          ⚠️ Sunucuya bağlanılamıyor — veriler yenilenemedi. Bağlantı geri geldiğinde otomatik güncellenir.
+        </div>
+      )}
       {lastUpdated && (
         <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'right', marginBottom: 8 }}>
           Son güncelleme: {lastUpdated.toLocaleTimeString('tr-TR')} · otomatik 30s

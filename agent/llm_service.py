@@ -97,8 +97,11 @@ Raporun yapısı:
 ## 🚚 Kargo Durumu
 (gecikme veya sorunlar — yoksa "Kargo süreçleri sorunsuz devam ediyor.")
 
+## 🎫 Bekleyen Biletler & Çözülmesi Gerekenler
+(açık biletleri öncelik sırasıyla listele; yoksa "İnceleme bekleyen bilet bulunmuyor.")
+
 ## ✅ Bugün Yapılması Gerekenler
-(öncelik sırasına göre madde madde)
+(öncelik sırasına göre madde madde, bilet aksiyon maddelerini de dahil et)
 
 ## 💡 Öneri
 (1 adet kısa stratejik öneri)
@@ -128,6 +131,7 @@ Raporun yapısı:
 ## 📦 Sipariş Durumu
 ## ⚠️ Stok Uyarıları
 ## 🚚 Kargo Durumu
+## 🎫 Bekleyen Biletler & Çözülmesi Gerekenler
 ## ✅ Bugün Yapılması Gerekenler
 ## 💡 Öneri
 
