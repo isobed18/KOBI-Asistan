@@ -14,6 +14,7 @@ from routers.chat import router as chat_router
 from routers.dashboard import router as dashboard_router
 from routers.tickets import router as tickets_router
 from routers.reports import router as reports_router
+from routers.admin_chat import router as admin_chat_router
 from integrations.telegram_bot import setup_telegram, stop_telegram
 from agent.scheduler import setup_scheduler, stop_scheduler
 
@@ -54,6 +55,7 @@ app.include_router(chat_router)
 app.include_router(dashboard_router)
 app.include_router(tickets_router)
 app.include_router(reports_router)
+app.include_router(admin_chat_router)
 
 # Static files
 os.makedirs(os.path.join(os.path.dirname(__file__), "static"), exist_ok=True)

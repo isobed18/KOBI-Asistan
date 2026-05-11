@@ -3,21 +3,23 @@ import { useEffect, useState } from 'react'
 import { getDashboardStats } from '../api.js'
 
 const NAV = [
-  { to: '/',          icon: '📊', label: 'Genel Bakış'  },
-  { to: '/orders',    icon: '📦', label: 'Siparişler'   },
-  { to: '/cargo',     icon: '🚚', label: 'Kargo'        },
-  { to: '/inventory', icon: '🗂️', label: 'Stok'         },
-  { to: '/tickets',   icon: '🎫', label: 'Biletler',  badge: 'openTickets' },
-  { to: '/reports',   icon: '📄', label: 'AI Raporlar' },
+  { to: '/',           icon: '📊', label: 'Genel Bakış'  },
+  { to: '/orders',     icon: '📦', label: 'Siparişler'   },
+  { to: '/cargo',      icon: '🚚', label: 'Kargo'        },
+  { to: '/inventory',  icon: '🗂️', label: 'Stok'         },
+  { to: '/tickets',    icon: '🎫', label: 'Biletler',  badge: 'openTickets' },
+  { to: '/reports',    icon: '📄', label: 'AI Raporlar' },
+  { to: '/assistant',  icon: '🤖', label: 'AI Asistan',  highlight: true },
 ]
 
 const PAGE_TITLES = {
-  '/':          { title: 'Genel Bakış',  sub: 'Günlük operasyonel özet' },
-  '/orders':    { title: 'Siparişler',   sub: 'Tüm sipariş yönetimi'   },
-  '/cargo':     { title: 'Kargo',        sub: 'Sevkiyat ve teslimat takibi' },
-  '/inventory': { title: 'Stok',         sub: 'Ürün ve envanter yönetimi' },
-  '/tickets':   { title: 'Biletler',     sub: 'İnsan incelemesi gerektiren durumlar' },
-  '/reports':   { title: 'AI Raporlar',  sub: 'LLM destekli yönetici raporları' },
+  '/':           { title: 'Genel Bakış',  sub: 'Günlük operasyonel özet' },
+  '/orders':     { title: 'Siparişler',   sub: 'Tüm sipariş yönetimi'   },
+  '/cargo':      { title: 'Kargo',        sub: 'Sevkiyat ve teslimat takibi' },
+  '/inventory':  { title: 'Stok',         sub: 'Ürün ve envanter yönetimi' },
+  '/tickets':    { title: 'Biletler',     sub: 'İnsan incelemesi gerektiren durumlar' },
+  '/reports':    { title: 'AI Raporlar',  sub: 'LLM destekli yönetici raporları' },
+  '/assistant':  { title: 'AI Asistan',   sub: 'Doğal dil ile stok, sipariş ve bilet yönetimi' },
 }
 
 export default function Layout({ children }) {
@@ -41,7 +43,7 @@ export default function Layout({ children }) {
 
         <nav className="sidebar-nav">
           <div className="nav-section-label">Yönetim</div>
-          {NAV.map(item => (
+          {NAV.filter(i => !i.highlight).map(item => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -55,10 +57,21 @@ export default function Layout({ children }) {
               )}
             </NavLink>
           ))}
+          <div className="nav-section-label" style={{ marginTop: 8 }}>Asistan</div>
+          {NAV.filter(i => i.highlight).map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => `nav-item nav-item-highlight${isActive ? ' active' : ''}`}
+            >
+              <span className="icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
-          v3.0 · LangGraph + FastAPI
+          v4.1 · LangGraph + FastAPI
         </div>
       </aside>
 

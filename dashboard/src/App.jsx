@@ -6,7 +6,8 @@ import Orders    from './pages/Orders.jsx'
 import Cargo     from './pages/Cargo.jsx'
 import Inventory from './pages/Inventory.jsx'
 import Tickets   from './pages/Tickets.jsx'
-import Reports   from './pages/Reports.jsx'
+import Reports        from './pages/Reports.jsx'
+import AdminAssistant from './pages/AdminAssistant.jsx'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/inventory" element={<ErrorBoundary><Inventory /></ErrorBoundary>} />
         <Route path="/tickets"   element={<ErrorBoundary><Tickets /></ErrorBoundary>}   />
         <Route path="/reports"   element={<ErrorBoundary><Reports /></ErrorBoundary>}   />
+        <Route path="/assistant" element={<ErrorBoundary><AdminAssistant /></ErrorBoundary>} />
         <Route path="*"          element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
