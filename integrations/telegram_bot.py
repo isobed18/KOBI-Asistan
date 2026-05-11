@@ -39,6 +39,7 @@ S_WAITING_PHONE = "waiting_phone"
 S_WAITING_ORDER = "waiting_order"
 S_WAITING_PROD  = "waiting_product"
 S_WAITING_CANCEL= "waiting_cancel"
+S_WAITING_OTP   = "waiting_otp"    # OTP dogrulama bekleniyor
 S_FREE_CHAT     = "free_chat"
 
 # ---------------------------------------------------------------------------
@@ -97,6 +98,7 @@ def _ud(context) -> dict:
     d.setdefault("telefon", None)
     d.setdefault("takip_kodu", None)
     d.setdefault("pending_action", None)
+    d.setdefault("otp_order_id", None)   # OTP akışındaki sipariş no
     return d
 
 async def _menu(update: Update, context, text=MENU_TEXT):
@@ -315,12 +317,98 @@ async def handle_message(update: Update, context):
         ud["state"] = S_MENU
         return
 
-    # --- Iptal Talebi ---
+    # --- Iptal Talebi: siparis no al, OTP gonder ---
     if state == S_WAITING_CANCEL:
-        await update.message.chat.send_action("typing")
-        activate_scope(sess)
-        await _llm(update, context, f"Siparisimi iptal etmek istiyorum: {text}")
+        nm = re.search(r"\b(\d{1,6})\b", text)
+        cm = re.search(r"(SIP-[A-Z0-9]{6})", text, re.IGNORECASE)
+        order_ref = nm.group(1) if nm else (cm.group(1) if cm else None)
+        if not order_ref:
+            await update.message.reply_text(
+                "Lutfen gecerli bir siparis numarasi girin (ornek: 42 ya da SIP-ABC123):",
+                reply_markup=BACK_KB,
+            )
+            return
+        # Siparis no'yu resolve et
+        from database.db import get_connection as _gc
+        conn = _gc()
+        if nm:
+            order_row = conn.execute(
+                "SELECT id, customer_name FROM orders WHERE id = ?", (int(order_ref),)
+            ).fetchone()
+        else:
+            order_row = conn.execute(
+                "SELECT id, customer_name FROM orders WHERE tracking_code = ?", (order_ref.upper(),)
+            ).fetchone()
+        conn.close()
+        if not order_row:
+            await update.message.reply_text(
+                f"Siparis #{order_ref} bulunamadi. Tekrar deneyin:",
+                reply_markup=BACK_KB,
+            )
+            return
+        order_id = int(order_row["id"])
+        # OTP olustur
+        from agent.otp import create_otp_challenge
+        tg_user_id = str(update.effective_user.id)
+        challenge = create_otp_challenge(
+            order_id=order_id,
+            action="cancellation",
+            channel="telegram",
+            channel_user_id=tg_user_id,
+        )
+        ud["otp_order_id"] = order_id
+        ud["state"] = S_WAITING_OTP
+        # DEBUG/DEMO: OTP'yi kullaniciya da gonder (production'da sadece kayitli numaraya gidecek)
+        await update.message.reply_text(
+            f"Siparis #{order_id} ({order_row['customer_name']}) iptal talebi icin dogrulama kodu:\n\n"
+            f"Kod: *{challenge['code']}*\n\n"
+            f"Bu kodu girin (10 dakika gecerli, {challenge.get('max_attempts',5)} deneme hakki):",
+            parse_mode="Markdown",
+            reply_markup=BACK_KB,
+        )
+        return
+
+    # --- OTP Dogrulama ---
+    if state == S_WAITING_OTP:
+        code = text.strip()
+        order_id = ud.get("otp_order_id")
+        if not order_id:
+            await _menu(update, context, "Oturum suresi doldu. Ana menuye yonlendiriliyor.")
+            return
+        from agent.otp import verify_otp_challenge
+        result = verify_otp_challenge(order_id=order_id, action="cancellation", code=code)
+        if not result["ok"]:
+            hata = result.get("hata", "Dogrulama basarisiz.")
+            # Deneme hakki doldu mu?
+            if "hakki doldu" in hata.lower():
+                await _menu(update, context, f"{hata} Ana menuye yonlendiriliyor.")
+                ud["otp_order_id"] = None
+            else:
+                await update.message.reply_text(
+                    f"Yanlis kod. {hata} Tekrar deneyin:", reply_markup=BACK_KB
+                )
+            return
+        # OTP dogrulandi — iptal biletini ac
+        from repositories.tickets import create_ticket as _create_ticket
+        ticket_id = _create_ticket(
+            payload={
+                "type": "cancellation_request",
+                "title": f"Musteri Iptal Talebi — Siparis #{order_id}",
+                "description": (
+                    f"Telegram kullanicisi siparis #{order_id} icin OTP dogrulamali "
+                    f"iptal talebinde bulundu. (tg_user_id={update.effective_user.id})"
+                ),
+                "priority": "high",
+                "related_order_id": order_id,
+            },
+        )
+        ud["otp_order_id"] = None
         ud["state"] = S_MENU
+        await update.message.reply_text(
+            f"Iptal talebiniz alindi. Bilet #{ticket_id} olusturuldu.\n"
+            f"Ekibimiz en kisa surede sizi arayacak.",
+            reply_markup=MENU_KB,
+        )
         return
 
     # --- Serbest Soru ---

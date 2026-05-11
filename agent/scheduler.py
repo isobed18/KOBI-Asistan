@@ -17,6 +17,20 @@ from agent.llm_service import (
     agenerate_daily_report,
     agenerate_stock_alert_content,
 )
+from agent.tenant_config import get_tenant_by_id
+from repositories.tickets import create_ticket as repo_create_ticket
+
+
+def _active_tenant_ids() -> list[int]:
+    """Sistemdeki tüm aktif tenant_id'leri döner (users tablosundan)."""
+    try:
+        conn = get_connection()
+        rows = conn.execute("SELECT DISTINCT tenant_id FROM users WHERE is_active=1").fetchall()
+        conn.close()
+        ids = [r["tenant_id"] for r in rows] if rows else []
+        return ids if ids else [1]
+    except Exception:
+        return [1]
 
 scheduler = AsyncIOScheduler()
 
@@ -45,26 +59,23 @@ def _create_ticket_in_db(
     priority: str = "normal",
     related_order_id: int = None,
     related_product_id: int = None,
+    tenant_id: int = 1,
+    dedupe_key: dict | None = None,
 ) -> int:
-    """Doğrudan DB'ye bilet yazar ve id döner."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO tickets (type, title, description, llm_content, priority, related_order_id, related_product_id)
-        VALUES (?,?,?,?,?,?,?)
-    """, (type_, title, description, llm_content, priority, related_order_id, related_product_id))
-    ticket_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    # Admin bildirimi
-    try:
-        from integrations.notifier import notify_new_ticket
-        notify_new_ticket(ticket_id, title, priority, type_, description)
-    except Exception:
-        pass
-
-    return ticket_id
+    """Repository üzerinden bilet yazar; notifier otomatik tetiklenir."""
+    return repo_create_ticket(
+        payload={
+            "type": type_,
+            "title": title,
+            "description": description,
+            "llm_content": llm_content,
+            "priority": priority,
+            "related_order_id": related_order_id,
+            "related_product_id": related_product_id,
+        },
+        tenant_id=tenant_id,
+        dedupe_key=dedupe_key,
+    )
 
 
 def _save_daily_report(report_text: str, raw_data: dict) -> int:
@@ -84,58 +95,70 @@ def _save_daily_report(report_text: str, raw_data: dict) -> int:
 # Sabah Raporu (08:00) — LLM destekli
 # ---------------------------------------------------------------------------
 
-async def sabah_raporu():
-    """Her gün sabah çalışır — LLM ile kapsamlı günlük rapor üretir."""
+async def _sabah_raporu_for_tenant(tenant_id: int):
+    """Tek bir tenant için sabah raporu üretir."""
+    ozet = gunluk_ozet.invoke({})
+    kritik = kritik_stok_listesi.invoke({})
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cargo_delays = cursor.execute("""
+        SELECT o.id, o.customer_name, o.cargo_tracking_code, ct.current_status
+        FROM orders o
+        JOIN cargo_tracking ct ON ct.tracking_code = o.cargo_tracking_code
+        WHERE o.status = 'kargoda' AND o.tenant_id = ?
+          AND ct.current_status IN ('Şubede Bekliyor', 'Gecikti')
+    """, (tenant_id,)).fetchall()
+    open_tickets = cursor.execute("""
+        SELECT id, type, priority, title, created_at
+        FROM tickets
+        WHERE status != 'resolved' AND tenant_id = ?
+        ORDER BY priority DESC, created_at ASC
+    """, (tenant_id,)).fetchall()
+    conn.close()
+
+    raw_data = {
+        "tenant_id": tenant_id,
+        "ozet": ozet,
+        "kritik_stok": kritik,
+        "kargo_gecikmeleri": [dict(r) for r in cargo_delays],
+        "acik_biletler": [dict(r) for r in open_tickets],
+        "rapor_tarihi": date.today().isoformat(),
+    }
+
+    # AI actionable tasks JSON'u raw_data'ya ekle (LLM yoksa template fallback)
     try:
-        ozet = gunluk_ozet.invoke({})
-        kritik = kritik_stok_listesi.invoke({})
+        from agent.llm_service import agenerate_ai_tasks
+        ai_tasks = await agenerate_ai_tasks(raw_data)
+        raw_data["ai_tasks"] = ai_tasks
+    except Exception:
+        raw_data["ai_tasks"] = None
 
-        conn = get_connection()
-        cursor = conn.cursor()
-        cargo_delays = cursor.execute("""
-            SELECT o.id, o.customer_name, o.cargo_tracking_code, ct.current_status
-            FROM orders o
-            JOIN cargo_tracking ct ON ct.tracking_code = o.cargo_tracking_code
-            WHERE o.status = 'kargoda' AND ct.current_status IN ('Şubede Bekliyor', 'Gecikti')
-        """).fetchall()
-        conn.close()
+    report_text = await agenerate_daily_report(raw_data)
+    report_id = _save_daily_report(report_text, raw_data)
 
-        conn2 = get_connection()
-        open_tickets = conn2.cursor().execute("""
-            SELECT id, type, priority, title, created_at
-            FROM tickets
-            WHERE status != 'resolved'
-            ORDER BY priority DESC, created_at ASC
-        """).fetchall()
-        conn2.close()
-
-        raw_data = {
-            "ozet": ozet,
-            "kritik_stok": kritik,
-            "kargo_gecikmeleri": [dict(r) for r in cargo_delays],
-            "acik_biletler": [dict(r) for r in open_tickets],
-            "rapor_tarihi": date.today().isoformat(),
-        }
-
-        report_text = await agenerate_daily_report(raw_data)
-        report_id = _save_daily_report(report_text, raw_data)
-
+    _add_notification(
+        "rapor",
+        f"Sabah Raporu Hazır (tenant={tenant_id})",
+        f"Rapor #{report_id} olusturuldu.",
+        "normal",
+    )
+    if kritik.get("urunler"):
         _add_notification(
-            "rapor",
-            "Sabah Raporu Hazır",
-            f"LLM destekli günlük rapor oluşturuldu (Rapor #{report_id}). Dashboard'da görüntüleyebilirsiniz.",
-            "normal",
+            "alarm",
+            "Kritik Stok Uyarisi",
+            f"{len(kritik['urunler'])} urun kritik seviyede.",
+            "yuksek",
         )
 
-        if kritik.get("urunler"):
-            _add_notification(
-                "alarm",
-                "Kritik Stok Uyarısı",
-                f"{len(kritik['urunler'])} ürün kritik seviyede. Tedarik süreci başlatılmalı.",
-                "yuksek",
-            )
-    except Exception as e:
-        print(f"[HATA] Sabah raporu hatası: {e}")
+
+async def sabah_raporu():
+    """Her gün sabah çalışır — tüm tenant'lar için rapor üretir."""
+    for tenant_id in _active_tenant_ids():
+        try:
+            await _sabah_raporu_for_tenant(tenant_id)
+        except Exception as e:
+            print(f"[HATA] Sabah raporu (tenant={tenant_id}): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +166,12 @@ async def sabah_raporu():
 # ---------------------------------------------------------------------------
 
 async def stok_alarm():
-    """Her 2 saatte çalışır — kritik stok tespiti + LLM bilet oluşturma."""
+    """Her 2 saatte çalışır — tüm tenant'lar için kritik stok tespiti + bilet."""
+    for tenant_id in _active_tenant_ids():
+        await _stok_alarm_for_tenant(tenant_id)
+
+
+async def _stok_alarm_for_tenant(tenant_id: int):
     try:
         kritik = kritik_stok_listesi.invoke({})
         urunler = kritik.get("urunler", [])
@@ -151,32 +179,20 @@ async def stok_alarm():
             return
 
         for urun in urunler:
-            # Aynı ürün için bugün açık bilet var mı?
-            conn = get_connection()
-            cursor = conn.cursor()
-            existing = cursor.execute("""
-                SELECT id FROM tickets
-                WHERE type = 'stock_alert'
-                  AND related_product_id = ?
-                  AND status != 'resolved'
-                  AND DATE(created_at) = DATE('now', 'localtime')
-            """, (urun["id"],)).fetchone()
-            conn.close()
-
-            if existing:
-                continue  # Bugün zaten bilet var
-
             llm_data = await agenerate_stock_alert_content(urun)
             llm_json = json.dumps(llm_data, ensure_ascii=False)
 
+            # Dedupe: aynı ürün için bugün açık bilet var mı?
             ticket_id = _create_ticket_in_db(
                 type_="stock_alert",
                 title=f"Kritik Stok: {urun['name']} ({urun['stock_quantity']} adet)",
                 description=(
-                    f"Ürün '{urun['name']}' stok seviyesi kritik eşiğin altına düştü. "
-                    f"Mevcut: {urun['stock_quantity']} adet, Eşik: {urun['low_stock_threshold']} adet."
+                    f"Urun '{urun['name']}' stok seviyesi kritik esigi altinda. "
+                    f"Mevcut: {urun['stock_quantity']} adet, Esik: {urun['low_stock_threshold']} adet."
                 ),
                 llm_content=llm_json,
+                tenant_id=tenant_id,
+                dedupe_key={"type": "stock_alert", "related_product_id": urun["id"]},
                 priority="high",
                 related_product_id=urun["id"],
             )
@@ -217,73 +233,60 @@ def _cargo_delay_template(order_info: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 async def kargo_gecikme_kontrol():
-    """Her 4 saatte çalışır — kargo gecikmelerini tespit eder + LLM bilet açar."""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        kargodakiler = cursor.execute("""
-            SELECT id, customer_name, customer_phone, cargo_tracking_code, total_price
-            FROM orders
-            WHERE status = 'kargoda' AND cargo_tracking_code IS NOT NULL
-        """).fetchall()
-        conn.close()
+    """Her 4 saatte çalışır — tüm tenant'lar için kargo gecikme kontrolü."""
+    for tenant_id in _active_tenant_ids():
+        try:
+            await _kargo_gecikme_for_tenant(tenant_id)
+        except Exception as e:
+            print(f"[HATA] Kargo kontrol (tenant={tenant_id}): {e}")
 
-        for row in kargodakiler:
-            kargo_bilgi = kargo_takip.invoke({"kargo_kodu": row["cargo_tracking_code"]})
-            durum = kargo_bilgi.get("guncel_durum", "")
 
-            if durum not in ("Şubede Bekliyor", "Gecikti", "İade Sürecinde"):
-                continue
+async def _kargo_gecikme_for_tenant(tenant_id: int):
+    conn = get_connection()
+    kargodakiler = conn.execute("""
+        SELECT id, customer_name, customer_phone, cargo_tracking_code, total_price
+        FROM orders
+        WHERE status = 'kargoda' AND cargo_tracking_code IS NOT NULL AND tenant_id = ?
+    """, (tenant_id,)).fetchall()
+    conn.close()
 
-            # Bugün bu sipariş için açık gecikme bileti var mı?
-            conn = get_connection()
-            cursor = conn.cursor()
-            existing = cursor.execute("""
-                SELECT id FROM tickets
-                WHERE type = 'cargo_delay'
-                  AND related_order_id = ?
-                  AND status != 'resolved'
-                  AND DATE(created_at) = DATE('now', 'localtime')
-            """, (row["id"],)).fetchone()
-            conn.close()
+    for row in kargodakiler:
+        kargo_bilgi = kargo_takip.invoke({"kargo_kodu": row["cargo_tracking_code"]})
+        durum = kargo_bilgi.get("guncel_durum", "")
+        if durum not in ("Şubede Bekliyor", "Gecikti", "İade Sürecinde"):
+            continue
 
-            if existing:
-                continue
+        order_info = {
+            "id": row["id"],
+            "customer_name": row["customer_name"],
+            "customer_phone": row["customer_phone"],
+            "cargo_tracking_code": row["cargo_tracking_code"],
+            "cargo_status": durum,
+            "estimated_delivery": kargo_bilgi.get("tahmini_teslimat"),
+            "total_price": row["total_price"],
+        }
+        llm_data = _cargo_delay_template(order_info)
+        llm_json = json.dumps(llm_data, ensure_ascii=False)
 
-            order_info = {
-                "id": row["id"],
-                "customer_name": row["customer_name"],
-                "customer_phone": row["customer_phone"],
-                "cargo_tracking_code": row["cargo_tracking_code"],
-                "cargo_status": durum,
-                "estimated_delivery": kargo_bilgi.get("tahmini_teslimat"),
-                "total_price": row["total_price"],
-            }
-
-            llm_data = _cargo_delay_template(order_info)
-            llm_json = json.dumps(llm_data, ensure_ascii=False)
-
-            ticket_id = _create_ticket_in_db(
-                type_="cargo_delay",
-                title=f"Kargo Gecikmesi — Sipariş #{row['id']} ({row['customer_name']})",
-                description=(
-                    f"Sipariş #{row['id']} ({row['customer_name']}) kargo durumu: '{durum}'. "
-                    f"Kargo kodu: {row['cargo_tracking_code']}."
-                ),
-                llm_content=llm_json,
-                priority="high",
-                related_order_id=row["id"],
-            )
-
-            _add_notification(
-                "alarm",
-                f"Kargo Gecikme Bileti: Sipariş #{row['id']}",
-                f"Bilet #{ticket_id} açıldı — {row['customer_name']} — Durum: {durum}",
-                "yuksek",
-            )
-
-    except Exception as e:
-        print(f"[HATA] Kargo kontrol hatası: {e}")
+        ticket_id = _create_ticket_in_db(
+            type_="cargo_delay",
+            title=f"Kargo Gecikmesi — Siparis #{row['id']} ({row['customer_name']})",
+            description=(
+                f"Siparis #{row['id']} ({row['customer_name']}) kargo durumu: '{durum}'. "
+                f"Kargo kodu: {row['cargo_tracking_code']}."
+            ),
+            llm_content=llm_json,
+            priority="high",
+            related_order_id=row["id"],
+            tenant_id=tenant_id,
+            dedupe_key={"type": "cargo_delay", "related_order_id": row["id"]},
+        )
+        _add_notification(
+            "alarm",
+            f"Kargo Gecikme Bileti: Siparis #{row['id']}",
+            f"Bilet #{ticket_id} acildi — {row['customer_name']} — Durum: {durum}",
+            "yuksek",
+        )
 
 
 # ---------------------------------------------------------------------------

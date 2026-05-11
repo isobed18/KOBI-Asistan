@@ -2,8 +2,54 @@ from __future__ import annotations
 
 from database.db import get_connection
 
-
 COMPLETION_STATUSES = {"kargoda", "teslim_edildi", "tamamlandi", "tamamlandı"}
+
+# ---------------------------------------------------------------------------
+# Okuma fonksiyonları
+# ---------------------------------------------------------------------------
+
+def list_orders(
+    tenant_id: int = 1,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    conn = get_connection()
+    q = "SELECT * FROM orders WHERE tenant_id = ?"
+    params: list = [tenant_id]
+    if status:
+        q += " AND status = ?"; params.append(status)
+    q += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_order(order_id: int, tenant_id: int = 1) -> dict | None:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM orders WHERE id = ? AND tenant_id = ?", (order_id, tenant_id)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_order_items(order_id: int) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT oi.*, p.name AS product_name FROM order_items oi
+           JOIN products p ON p.id = oi.product_id
+           WHERE oi.order_id = ?""",
+        (order_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Yazma fonksiyonları
+# ---------------------------------------------------------------------------
 
 
 def _stock_already_deducted(conn, order_id: int, tenant_id: int) -> bool:

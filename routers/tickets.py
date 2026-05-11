@@ -2,7 +2,7 @@
 Tickets Router — İnsan İncelemesi Gerektiren Biletler
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 import sys
 import os
@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from database.db import get_connection
 from database.schemas import TicketCreate, TicketStatusUpdate
+from repositories.tickets import create_ticket as repo_create_ticket
 
 router = APIRouter(prefix="/tickets", tags=["Biletler"])
 
@@ -23,13 +24,14 @@ VALID_PRIORITIES = {"low", "normal", "high", "critical"}
 def list_tickets(
     status: Optional[str] = None,
     type: Optional[str] = None,
+    priority: Optional[str] = None,
     limit: int = 50,
 ):
     conn = get_connection()
     cursor = conn.cursor()
 
     query = "SELECT * FROM tickets WHERE 1=1"
-    params = []
+    params: list = []
 
     if status:
         query += " AND status = ?"
@@ -37,6 +39,9 @@ def list_tickets(
     if type:
         query += " AND type = ?"
         params.append(type)
+    if priority:
+        query += " AND priority = ?"
+        params.append(priority)
 
     query += " ORDER BY created_at DESC LIMIT ?"
     params.append(limit)
@@ -59,18 +64,19 @@ def get_ticket(ticket_id: int):
 
 @router.post("/", summary="Manuel bilet oluştur", status_code=201)
 def create_ticket(body: TicketCreate):
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO tickets (type, title, description, priority, llm_content, related_order_id, related_product_id)
-        VALUES (?,?,?,?,?,?,?)
-    """, (
-        body.type, body.title, body.description, body.priority,
-        body.llm_content, body.related_order_id, body.related_product_id
-    ))
-    ticket_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    """Repository katmanı üzerinden bilet oluşturur; notifier otomatik tetiklenir."""
+    ticket_id = repo_create_ticket(
+        payload={
+            "type": body.type,
+            "title": body.title,
+            "description": body.description,
+            "priority": body.priority,
+            "llm_content": body.llm_content,
+            "related_order_id": body.related_order_id,
+            "related_product_id": body.related_product_id,
+        },
+        tenant_id=1,  # TODO: JWT'den al
+    )
     return {"message": "Bilet oluşturuldu.", "ticket_id": ticket_id}
 
 

@@ -46,6 +46,35 @@ def fuzzy_score(query: str, name: str) -> float:
     return max(word_score, seq_score * 0.78)
 
 
+def list_products(
+    tenant_id: int = 1,
+    category: str | None = None,
+    critical_only: bool = False,
+    limit: int = 100,
+) -> list[dict]:
+    conn = get_connection()
+    q = "SELECT * FROM products WHERE is_active = 1 AND tenant_id = ?"
+    params: list = [tenant_id]
+    if category:
+        q += " AND category = ?"; params.append(category)
+    if critical_only:
+        q += " AND stock_quantity <= low_stock_threshold"
+    q += " ORDER BY name ASC LIMIT ?"; params.append(limit)
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_product(product_id: int, tenant_id: int = 1) -> dict | None:
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM products WHERE id = ? AND tenant_id = ? AND is_active = 1",
+        (product_id, tenant_id),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 def search_products(query: str, tenant_id: int = 1, threshold: float = 0.38, limit: int = 5) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(

@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     TELEGRAM_ADMIN_CHAT_ID: str = ""   # admin Telegram chat ID (bildirimler için)
     TELEGRAM_ENABLED: bool = True
 
+    # Intent Classifier
+    USE_EMBEDDING_CLASSIFIER: bool = False   # sentence-transformers ağır; demo'da False bırak
+
     # JWT Auth
     JWT_SECRET: str = "kobi-super-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"

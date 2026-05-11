@@ -114,36 +114,53 @@ SEMANTIC_EXAMPLES = {
 _embedding_model = None
 _example_embeddings = None
 
+# Feature flag: USE_EMBEDDING_CLASSIFIER=true → sentence-transformers yükle
+# False ise sadece difflib fallback kullanılır (hafif, sıfır bağımlılık).
+import os as _os
+_USE_EMBEDDING = _os.environ.get("USE_EMBEDDING_CLASSIFIER", "false").lower() == "true"
+
 
 def _semantic_intent(text: str) -> tuple[str, float] | None:
-    """Optional sentence-transformers similarity; difflib fallback is zero-dep."""
+    """
+    Semantic intent: sentence-transformers (USE_EMBEDDING_CLASSIFIER=true) veya
+    difflib fallback. Embedding kapalıysa sadece difflib çalışır.
+    """
     global _embedding_model, _example_embeddings
-    try:
-        if _embedding_model is None:
-            from sentence_transformers import SentenceTransformer
 
-            _embedding_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-            flat = [(intent, phrase) for intent, phrases in SEMANTIC_EXAMPLES.items() for phrase in phrases]
-            _example_embeddings = (
-                flat,
-                _embedding_model.encode([phrase for _, phrase in flat], normalize_embeddings=True),
-            )
-        flat, embeddings = _example_embeddings
-        query_emb = _embedding_model.encode([text], normalize_embeddings=True)[0]
-        scores = embeddings @ query_emb
-        best_idx = int(scores.argmax())
-        best_score = float(scores[best_idx])
-        if best_score >= 0.68:
-            return flat[best_idx][0], best_score
-    except Exception:
-        best_intent, best_score = None, 0.0
-        for intent, phrases in SEMANTIC_EXAMPLES.items():
-            for phrase in phrases:
-                score = SequenceMatcher(None, text.lower(), phrase.lower()).ratio()
-                if score > best_score:
-                    best_intent, best_score = intent, score
-        if best_intent and best_score >= 0.72:
-            return best_intent, best_score
+    if _USE_EMBEDDING:
+        try:
+            if _embedding_model is None:
+                import logging
+                logging.getLogger(__name__).debug("Loading sentence-transformers model...")
+                from sentence_transformers import SentenceTransformer
+                _embedding_model = SentenceTransformer(
+                    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+                )
+                flat = [(intent, phrase) for intent, phrases in SEMANTIC_EXAMPLES.items() for phrase in phrases]
+                _example_embeddings = (
+                    flat,
+                    _embedding_model.encode([phrase for _, phrase in flat], normalize_embeddings=True),
+                )
+            flat, embeddings = _example_embeddings
+            query_emb = _embedding_model.encode([text], normalize_embeddings=True)[0]
+            scores = embeddings @ query_emb
+            best_idx = int(scores.argmax())
+            best_score = float(scores[best_idx])
+            if best_score >= 0.68:
+                return flat[best_idx][0], best_score
+            return None
+        except Exception:
+            pass  # embedding hatası → difflib'e düş
+
+    # difflib fallback (her zaman çalışır)
+    best_intent, best_score = None, 0.0
+    for intent, phrases in SEMANTIC_EXAMPLES.items():
+        for phrase in phrases:
+            score = SequenceMatcher(None, text.lower(), phrase.lower()).ratio()
+            if score > best_score:
+                best_intent, best_score = intent, score
+    if best_intent and best_score >= 0.72:
+        return best_intent, best_score
     return None
 
 # ---------------------------------------------------------------------------
