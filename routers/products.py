@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from database.db import get_connection
 from database.schemas import ProductCreate, StockUpdateRequest
+from agent.tenant_context import get_tenant_id
 
 router = APIRouter(prefix="/products", tags=["Ürünler"])
 
@@ -32,8 +33,8 @@ def list_products(
     conn = get_connection()
     cursor = conn.cursor()
 
-    query = "SELECT * FROM products WHERE is_active = 1"
-    params = []
+    query = "SELECT * FROM products WHERE is_active = 1 AND tenant_id = ?"
+    params = [get_tenant_id()]
 
     if category:
         query += " AND category = ?"
@@ -56,7 +57,8 @@ def get_product(product_id: int):
     conn = get_connection()
     cursor = conn.cursor()
     row = cursor.execute(
-        "SELECT * FROM products WHERE id = ? AND is_active = 1", (product_id,)
+        "SELECT * FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
+        (product_id, get_tenant_id())
     ).fetchone()
     if not row:
         conn.close()
@@ -71,9 +73,9 @@ def create_product(body: ProductCreate):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO products (name, category, price, stock_quantity, low_stock_threshold)
-        VALUES (?,?,?,?,?)
-    """, (body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold))
+        INSERT INTO products (tenant_id, name, category, price, stock_quantity, low_stock_threshold)
+        VALUES (?,?,?,?,?,?)
+    """, (get_tenant_id(), body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold))
     product_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -90,7 +92,8 @@ def update_stock(product_id: int, body: StockUpdateRequest):
     conn = get_connection()
     cursor = conn.cursor()
     row = cursor.execute(
-        "SELECT id, stock_quantity FROM products WHERE id = ? AND is_active = 1", (product_id,)
+        "SELECT id, stock_quantity FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
+        (product_id, get_tenant_id())
     ).fetchone()
     if not row:
         conn.close()
@@ -106,13 +109,13 @@ def update_stock(product_id: int, body: StockUpdateRequest):
 
     old_qty = row["stock_quantity"]
     cursor.execute(
-        "UPDATE products SET stock_quantity = ? WHERE id = ?",
-        (new_qty, product_id)
+        "UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?",
+        (new_qty, product_id, get_tenant_id())
     )
     cursor.execute("""
-        INSERT INTO stock_movements (product_id, delta, reason, before_qty, after_qty)
-        VALUES (?, ?, ?, ?, ?)
-    """, (product_id, body.quantity_change, body.reason or "manuel", old_qty, new_qty))
+        INSERT INTO stock_movements (tenant_id, product_id, delta, reason, before_qty, after_qty)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (get_tenant_id(), product_id, body.quantity_change, body.reason or "manuel", old_qty, new_qty))
     conn.commit()
     conn.close()
     return {
@@ -133,10 +136,10 @@ def stock_movements(product_id: int, limit: int = 50):
     rows = cursor.execute("""
         SELECT id, delta, reason, note, before_qty, after_qty, created_at
         FROM stock_movements
-        WHERE product_id = ?
+        WHERE product_id = ? AND tenant_id = ?
         ORDER BY created_at DESC
         LIMIT ?
-    """, (product_id, limit)).fetchall()
+    """, (product_id, get_tenant_id(), limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -147,12 +150,13 @@ def deactivate_product(product_id: int):
     conn = get_connection()
     cursor = conn.cursor()
     row = cursor.execute(
-        "SELECT id FROM products WHERE id = ? AND is_active = 1", (product_id,)
+        "SELECT id FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
+        (product_id, get_tenant_id())
     ).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail=f"Ürün #{product_id} bulunamadı.")
-    cursor.execute("UPDATE products SET is_active = 0 WHERE id = ?", (product_id,))
+    cursor.execute("UPDATE products SET is_active = 0 WHERE id = ? AND tenant_id = ?", (product_id, get_tenant_id()))
     conn.commit()
     conn.close()
     return {"message": f"Ürün #{product_id} pasife alındı."}

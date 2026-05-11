@@ -1,8 +1,13 @@
 const BASE = ''  // proxied by Vite dev server
 
 async function req(path, options = {}) {
+  const token = localStorage.getItem('kobi_token')
   const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
     ...options,
   })
   if (!res.ok) {
@@ -69,3 +74,4 @@ export const markNotificationRead = (id) =>
 // Dashboard extras
 export const getSalesChart  = () => req('/dashboard/sales-chart')
 export const generateAiTasks = () => req('/dashboard/ai-tasks', { method: 'POST' })
+export const getAnalytics = () => req('/dashboard/analytics')

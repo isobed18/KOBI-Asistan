@@ -2,13 +2,15 @@
 Admin Chat Endpoint — İşletmeci LLM Asistanı
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
 import uuid
 
 from langchain_core.messages import HumanMessage
 from agent.admin_graph import admin_graph
+from agent.tenant_context import set_tenant_id
+from routers.auth_router import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin Asistan"])
 
@@ -31,13 +33,14 @@ class AdminChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=AdminChatResponse)
-async def admin_chat(request: AdminChatRequest):
+async def admin_chat(request: AdminChatRequest, current_user: CurrentUser = Depends(get_current_user)):
     """
     İşletmeci için yönetim asistanı. Müşteri auth gerekmez.
     Stok girişi, sipariş güncelleme, ürün ekleme, bilet yönetimi.
     """
     session_id = request.session_id or f"admin_{uuid.uuid4().hex[:8]}"
     config = {"configurable": {"thread_id": session_id}}
+    set_tenant_id(current_user.tenant_id)
 
     try:
         result = admin_graph.invoke(
@@ -83,7 +86,7 @@ async def admin_chat(request: AdminChatRequest):
 
 
 @router.delete("/chat/{session_id}")
-async def clear_admin_session(session_id: str):
+async def clear_admin_session(session_id: str, current_user: CurrentUser = Depends(get_current_user)):
     """Admin chat geçmişini sıfırlar (yeni sohbet başlatmak için)."""
     # MemorySaver in-memory olduğu için sadece frontend'e bilgi dönmek yeterli
     return {"mesaj": f"Oturum '{session_id}' sıfırlandı.", "session_id": session_id}

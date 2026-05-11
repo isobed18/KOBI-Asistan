@@ -105,6 +105,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stock_movements (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id   INTEGER NOT NULL DEFAULT 1,
             product_id  INTEGER NOT NULL,
             delta       INTEGER NOT NULL,
             reason      TEXT NOT NULL DEFAULT 'manuel',
@@ -115,6 +116,15 @@ def init_db():
             FOREIGN KEY (product_id) REFERENCES products(id)
         )
     """)
+
+    # Hafif migration: eski SQLite dosyalarinda yeni kolonlar eksikse ekle.
+    def ensure_column(table: str, column: str, ddl: str):
+        cols = [r["name"] for r in cursor.execute(f"PRAGMA table_info({table})").fetchall()]
+        if column not in cols:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+    for table in ("products", "orders", "tickets", "users", "stock_movements"):
+        ensure_column(table, "tenant_id", "INTEGER NOT NULL DEFAULT 1")
 
     # KULLANICILAR (admin / kobi)
     cursor.execute("""

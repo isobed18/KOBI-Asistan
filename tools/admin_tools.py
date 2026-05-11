@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from difflib import SequenceMatcher
 from langchain_core.tools import tool
 from database.db import get_connection
+from agent.tenant_context import get_tenant_id
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +74,8 @@ def _find_product(urun_adi: str, threshold: float = 0.42):
     """
     conn = get_connection()
     rows = conn.execute(
-        "SELECT id, name, stock_quantity FROM products WHERE is_active = 1"
+        "SELECT id, name, stock_quantity FROM products WHERE is_active = 1 AND tenant_id = ?",
+        (get_tenant_id(),),
     ).fetchall()
     conn.close()
 
@@ -101,10 +103,10 @@ def _do_stok_guncelle(urun_adi: str, miktar: int, neden: str) -> dict:
         return {"hata": f"Stok sıfırın altına düşemez. Mevcut: {r['stock_quantity']}, delta: {miktar}"}
 
     conn = get_connection()
-    conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_qty, r["id"]))
+    conn.execute("UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?", (new_qty, r["id"], get_tenant_id()))
     conn.execute(
-        "INSERT INTO stock_movements (product_id, delta, reason, before_qty, after_qty) VALUES (?,?,?,?,?)",
-        (r["id"], miktar, neden, r["stock_quantity"], new_qty),
+        "INSERT INTO stock_movements (tenant_id, product_id, delta, reason, before_qty, after_qty) VALUES (?,?,?,?,?,?)",
+        (get_tenant_id(), r["id"], miktar, neden, r["stock_quantity"], new_qty),
     )
     conn.commit()
     conn.close()
@@ -168,8 +170,9 @@ def _deduct_stock_for_order(conn, siparis_no: int) -> list:
     items = conn.execute(
         "SELECT oi.product_id, oi.quantity, p.name, p.stock_quantity "
         "FROM order_items oi JOIN products p ON p.id = oi.product_id "
-        "WHERE oi.order_id = ?",
-        (siparis_no,),
+        "JOIN orders o ON o.id = oi.order_id "
+        "WHERE oi.order_id = ? AND o.tenant_id = ?",
+        (siparis_no, get_tenant_id()),
     ).fetchall()
 
     warnings = []
@@ -187,8 +190,8 @@ def _deduct_stock_for_order(conn, siparis_no: int) -> list:
         )
         conn.execute(
             "INSERT INTO stock_movements "
-            "(product_id, delta, reason, before_qty, after_qty) VALUES (?,?,?,?,?)",
-            (item["product_id"], -item["quantity"],
+            "(tenant_id, product_id, delta, reason, before_qty, after_qty) VALUES (?,?,?,?,?,?)",
+            (get_tenant_id(), item["product_id"], -item["quantity"],
              f"Sipariş #{siparis_no} kargoya verildi", before, after),
         )
     return warnings
@@ -202,7 +205,8 @@ def _do_siparis_guncelle(siparis_no: int, yeni_durum: str,
 
     conn = get_connection()
     order = conn.execute(
-        "SELECT id, status, customer_name FROM orders WHERE id = ?", (siparis_no,)
+        "SELECT id, status, customer_name FROM orders WHERE id = ? AND tenant_id = ?",
+        (siparis_no, get_tenant_id()),
     ).fetchone()
     if not order:
         conn.close()
@@ -218,7 +222,8 @@ def _do_siparis_guncelle(siparis_no: int, yeni_durum: str,
         fields.append("notes = ?");               params.append(siparis_notu)
     params.append(siparis_no)
 
-    conn.execute(f"UPDATE orders SET {', '.join(fields)} WHERE id = ?", params)
+    params.append(get_tenant_id())
+    conn.execute(f"UPDATE orders SET {', '.join(fields)} WHERE id = ? AND tenant_id = ?", params)
 
     # Kargoya geçişte stok otomatik düşür (sadece hazırlanıyor → kargoda)
     stok_uyarilari = []
@@ -293,15 +298,16 @@ def admin_urun_ekle(
     Admin kullanımı."""
     conn = get_connection()
     existing = conn.execute(
-        "SELECT id FROM products WHERE name = ? AND is_active = 1", (isim,)
+        "SELECT id FROM products WHERE name = ? AND is_active = 1 AND tenant_id = ?",
+        (isim, get_tenant_id()),
     ).fetchone()
     if existing:
         conn.close()
         return {"hata": f"'{isim}' adında ürün zaten mevcut (ID: {existing['id']})."}
 
     conn.execute(
-        "INSERT INTO products (name, category, price, stock_quantity, low_stock_threshold) VALUES (?,?,?,?,?)",
-        (isim, kategori, fiyat, stok, stok_esigi),
+        "INSERT INTO products (tenant_id, name, category, price, stock_quantity, low_stock_threshold) VALUES (?,?,?,?,?,?)",
+        (get_tenant_id(), isim, kategori, fiyat, stok, stok_esigi),
     )
     product_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.commit()
@@ -337,7 +343,8 @@ def admin_bilet_guncelle(
 
     conn = get_connection()
     ticket = conn.execute(
-        "SELECT id, title, status FROM tickets WHERE id = ?", (bilet_id,)
+        "SELECT id, title, status FROM tickets WHERE id = ? AND tenant_id = ?",
+        (bilet_id, get_tenant_id()),
     ).fetchone()
     if not ticket:
         conn.close()
@@ -346,13 +353,13 @@ def admin_bilet_guncelle(
     ek_not = f"\n\nNot: {cozum_notu}" if cozum_notu else ""
     if yeni_durum == "resolved":
         conn.execute(
-            "UPDATE tickets SET status=?, resolved_at=datetime('now','localtime'), description=description||? WHERE id=?",
-            (yeni_durum, ek_not, bilet_id),
+            "UPDATE tickets SET status=?, resolved_at=datetime('now','localtime'), description=description||? WHERE id=? AND tenant_id=?",
+            (yeni_durum, ek_not, bilet_id, get_tenant_id()),
         )
     else:
         conn.execute(
-            "UPDATE tickets SET status=?, description=description||? WHERE id=?",
-            (yeni_durum, ek_not, bilet_id),
+            "UPDATE tickets SET status=?, description=description||? WHERE id=? AND tenant_id=?",
+            (yeni_durum, ek_not, bilet_id, get_tenant_id()),
         )
     conn.commit()
     conn.close()

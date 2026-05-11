@@ -10,6 +10,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage
 
 from agent.graph import _create_llm
+from agent.tenant_context import get_tenant_id
+from agent.tenant_config import tenant_prompt_block
 from tools.order_product_tools import (
     urun_stok_kontrol,
     kritik_stok_listesi,
@@ -72,7 +74,8 @@ _admin_llm_with_tools = _admin_llm.bind_tools(ALL_ADMIN_TOOLS)
 
 
 def _admin_agent_node(state: MessagesState):
-    system = SystemMessage(content=ADMIN_SYSTEM_PROMPT)
+    tenant_block = tenant_prompt_block(get_tenant_id())
+    system = SystemMessage(content=f"{ADMIN_SYSTEM_PROMPT}\n\nTENANT CONFIG:\n{tenant_block}")
     messages = [system] + state["messages"]
     response = _admin_llm_with_tools.invoke(messages)
     return {"messages": [response]}

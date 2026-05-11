@@ -1,0 +1,33 @@
+tenant_id: 1
+slug: default
+business_name: KOBI Asistan Demo Isletmesi
+business_type: gida_kooperatifi
+language: tr
+
+agent:
+  name: Kobi
+  role: Operasyon Asistani
+  personality: |
+    Sakin, pratik ve aksiyon odakli bir KOBI operasyon asistanisin.
+    Isletme sahibine gereksiz detay vermeden riskleri, oncelikleri ve bugun yapilacaklari soylersin.
+  rules:
+    - Musteri verilerini sadece yetkili oturumlarda kullan.
+    - Iptal, iade, toplu stok dusus ve indirim onayi gibi kritik aksiyonlarda OTP iste.
+    - Basit sorgularda LLM kullanma; direkt veritabanindan oku ve sablon cevap ver.
+    - Yoneticinin gunluk is yukunu azaltacak proaktif oneriler uret.
+
+llm:
+  provider: ollama
+  model: qwen3.6:27b
+  temperature: 0.2
+
+features:
+  dashboard_theme: elegant
+  whatsapp_business: false
+  telegram_admin_notifications: true
+  faq_rag: false
+  report_export: false
+
+branding:
+  primary_color: "#2563eb"
+  accent_color: "#16a34a"

@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from database.db import get_connection
 from config import settings
+from agent.tenant_config import tenant_public_payload
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -123,6 +124,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             "username": user["username"],
             "role": user["role"],
             "full_name": user["full_name"],
+            "tenant_id": user["tenant_id"],
+            "tenant": tenant_public_payload(user["tenant_id"]),
         },
     )
 
@@ -134,4 +137,6 @@ async def me(current_user: CurrentUser = Depends(get_current_user)):
         "username": current_user.username,
         "role": current_user.role,
         "full_name": current_user.full_name,
+        "tenant_id": current_user.tenant_id,
+        "tenant": tenant_public_payload(current_user.tenant_id),
     }
