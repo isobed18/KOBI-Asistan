@@ -186,6 +186,37 @@ def kritik_stok_listesi() -> dict:
 
 
 @tool
+def create_ticket(
+    type: str,
+    title: str,
+    description: str,
+    priority: str = "normal",
+    related_order_id: int = None,
+) -> dict:
+    """İnsan incelemesi gerektiren durumlarda bilet oluşturur.
+    Müşteri sipariş iptali, teslimat şikayeti, iade talebi veya başka bir escalation gerektiğinde kullanılır.
+    type değerleri: cancellation_request | complaint | refund_request | other
+    priority değerleri: low | normal | high | critical"""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO tickets (type, title, description, priority, related_order_id)
+        VALUES (?,?,?,?,?)
+    """, (type, title, description, priority, related_order_id))
+    ticket_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    return {
+        "bilet_id": ticket_id,
+        "mesaj": f"Talebiniz #{ticket_id} numaralı bilet olarak kaydedildi. Ekibimiz en kısa sürede sizinle iletişime geçecek.",
+        "tip": type,
+        "oncelik": priority,
+    }
+
+
+@tool
 def gunluk_ozet() -> dict:
     """Gunluk siparis durumu, gelir ve kritik stok ozetini getirir.
     Yonetici 'bugunku durum nedir?' dediginde bu tool kullanilir."""

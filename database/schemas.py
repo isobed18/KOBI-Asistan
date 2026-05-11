@@ -57,7 +57,7 @@ class OrderCreate(BaseModel):
     notes: Optional[str] = None
     items: List[dict]           # [{product_id, quantity}]
 
-#  ÖZET 
+#  ÖZET
 
 class DailySummary(BaseModel):
     date: str
@@ -66,3 +66,39 @@ class DailySummary(BaseModel):
     total_revenue: float
     low_stock_products: List[dict]
     pending_shipments: int
+
+#  BİLET
+
+class TicketCreate(BaseModel):
+    type: str                       # cargo_delay | stock_alert | cancellation_request | anomaly
+    title: str
+    description: Optional[str] = None
+    priority: str = "normal"        # low | normal | high | critical
+    llm_content: Optional[str] = None
+    related_order_id: Optional[int] = None
+    related_product_id: Optional[int] = None
+
+class TicketStatusUpdate(BaseModel):
+    status: str                     # open | in_progress | resolved
+
+class TicketResponse(BaseModel):
+    id: int
+    type: str
+    priority: str
+    status: str
+    title: str
+    description: Optional[str]
+    llm_content: Optional[str]
+    related_order_id: Optional[int]
+    related_product_id: Optional[int]
+    created_at: str
+    resolved_at: Optional[str]
+
+#  GÜNLÜK RAPOR
+
+class ReportResponse(BaseModel):
+    id: int
+    date: str
+    report_text: str
+    raw_data: Optional[str]
+    created_at: str

@@ -104,20 +104,41 @@ def update_stock(product_id: int, body: StockUpdateRequest):
             detail=f"Stok miktarı 0'ın altına düşemez. Mevcut: {row['stock_quantity']}"
         )
 
+    old_qty = row["stock_quantity"]
     cursor.execute(
         "UPDATE products SET stock_quantity = ? WHERE id = ?",
         (new_qty, product_id)
     )
+    cursor.execute("""
+        INSERT INTO stock_movements (product_id, delta, reason, before_qty, after_qty)
+        VALUES (?, ?, ?, ?, ?)
+    """, (product_id, body.quantity_change, body.reason or "manuel", old_qty, new_qty))
     conn.commit()
     conn.close()
     return {
         "message": "Stok güncellendi.",
         "product_id": product_id,
-        "old_quantity": row["stock_quantity"],
+        "old_quantity": old_qty,
         "new_quantity": new_qty,
         "change": body.quantity_change,
         "reason": body.reason
     }
+
+
+#  GET /products/{id}/movements
+@router.get("/{product_id}/movements", summary="Stok hareket geçmişi")
+def stock_movements(product_id: int, limit: int = 50):
+    conn = get_connection()
+    cursor = conn.cursor()
+    rows = cursor.execute("""
+        SELECT id, delta, reason, note, before_qty, after_qty, created_at
+        FROM stock_movements
+        WHERE product_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (product_id, limit)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # DELETE /products/{id} (soft delete)

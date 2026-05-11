@@ -20,6 +20,7 @@ from agent.auth import (
     validate_phone,
     validate_tracking_code,
 )
+from agent.intent_classifier import classify, fast_response
 from agent.prompt import AUTH_REQUEST_PROMPT
 from agent.scheduler import notification_queue
 
@@ -107,7 +108,19 @@ async def chat(request: ChatRequest):
     # 3. Scope'u aktif et
     activate_scope(session_id)
 
-    # 4. Agent'i cagir
+    # 4. Intent Classifier — basit sorgularda LLM bypass (~100ms, sifir maliyet)
+    classified = classify(request.mesaj)
+    if classified.bypass_llm:
+        fast = fast_response(classified)
+        if fast:
+            return ChatResponse(
+                yanit=fast,
+                session_id=session_id,
+                tool_calls=[{"tool": classified.intent, "input": classified.params}],
+                auth_status=_get_auth_status(session_id),
+            )
+
+    # 5. LangGraph Agent
     config = {"configurable": {"thread_id": session_id}}
 
     try:

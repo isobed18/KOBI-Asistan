@@ -1,11 +1,6 @@
 """
-KOBI Asistan — LangGraph Agent (Auth-Aware, Multi-Provider)
-=============================================================
-Desteklenen LLM'ler:
-  - Ollama (local) → langchain-ollama
-  - OpenAI         → langchain-openai
-  - Google Gemini  → langchain-google-genai
-  - Anthropic      → langchain-anthropic
+KOBI Asistan — LangGraph Agent (Auth-Aware)
+=============================================
 """
 
 from langgraph.graph import StateGraph, MessagesState, START, END
@@ -21,9 +16,45 @@ from tools.order_product_tools import (
     urun_stok_kontrol,
     kritik_stok_listesi,
     gunluk_ozet,
+    create_ticket,
 )
 from tools.kargo_tools import kargo_takip
 from config import settings
+
+
+def _create_llm(temperature: float = 0.1):
+    """Provider-bağımsız LLM factory. LLM_PROVIDER env değişkeniyle kontrol edilir."""
+    provider = settings.LLM_PROVIDER.lower()
+
+    if provider == "openai":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model=settings.OPENAI_MODEL,
+            temperature=temperature,
+            api_key=settings.OPENAI_API_KEY,
+        )
+    elif provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(
+            model=settings.ANTHROPIC_MODEL,
+            temperature=temperature,
+            api_key=settings.ANTHROPIC_API_KEY,
+        )
+    elif provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(
+            model=settings.GEMINI_MODEL,
+            temperature=temperature,
+            google_api_key=settings.GEMINI_API_KEY,
+        )
+    else:  # ollama (default)
+        from langchain_ollama import ChatOllama
+        return ChatOllama(
+            model=settings.OLLAMA_MODEL,
+            base_url=settings.OLLAMA_BASE_URL,
+            temperature=temperature,
+        )
+
 
 # -- Tool listesi --
 ALL_TOOLS = [
@@ -33,63 +64,8 @@ ALL_TOOLS = [
     kritik_stok_listesi,
     gunluk_ozet,
     kargo_takip,
+    create_ticket,
 ]
-
-
-def _create_llm():
-    """
-    LLM_PROVIDER'a gore uygun LLM instance'i olusturur.
-    .env dosyasinda LLM_PROVIDER degiskenini ayarlayin:
-      - "ollama"  → Local Ollama (varsayilan, API key gereksiz)
-      - "openai"  → OpenAI API (OPENAI_API_KEY gerekli)
-      - "gemini"  → Google Gemini (GOOGLE_API_KEY gerekli)
-      - "claude"  → Anthropic Claude (ANTHROPIC_API_KEY gerekli)
-    """
-    provider = settings.LLM_PROVIDER.lower().strip()
-
-    if provider == "openai":
-        if not settings.OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY .env dosyasinda tanimli degil!")
-        from langchain_openai import ChatOpenAI
-        print(f"[LLM] OpenAI: {settings.OPENAI_MODEL}")
-        return ChatOpenAI(
-            model=settings.OPENAI_MODEL,
-            api_key=settings.OPENAI_API_KEY,
-            temperature=0.1,
-        )
-
-    elif provider == "gemini":
-        if not settings.GOOGLE_API_KEY:
-            raise ValueError("GOOGLE_API_KEY .env dosyasinda tanimli degil!")
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        print(f"[LLM] Google Gemini: {settings.GEMINI_MODEL}")
-        return ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=settings.GOOGLE_API_KEY,
-            temperature=0.1,
-        )
-
-    elif provider == "claude":
-        if not settings.ANTHROPIC_API_KEY:
-            raise ValueError("ANTHROPIC_API_KEY .env dosyasinda tanimli degil!")
-        from langchain_anthropic import ChatAnthropic
-        print(f"[LLM] Anthropic Claude: {settings.CLAUDE_MODEL}")
-        return ChatAnthropic(
-            model=settings.CLAUDE_MODEL,
-            api_key=settings.ANTHROPIC_API_KEY,
-            temperature=0.1,
-        )
-
-    else:
-        # Default: Ollama (local, ucretsiz)
-        from langchain_ollama import ChatOllama
-        print(f"[LLM] Ollama (local): {settings.OLLAMA_MODEL} @ {settings.OLLAMA_BASE_URL}")
-        return ChatOllama(
-            model=settings.OLLAMA_MODEL,
-            base_url=settings.OLLAMA_BASE_URL,
-            temperature=0.1,
-        )
-
 
 # -- LLM --
 llm = _create_llm()
@@ -98,15 +74,15 @@ llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
 # -- Graph Nodes --
 def agent_node(state: MessagesState):
-    """LLM'e mesajlari gonderir, tool call veya final yanit doner."""
+    """LLM'e mesajları gönderir, tool call veya final yanıt döner."""
     scope = get_active_scope()
 
     if scope and (scope.get("telefon") or scope.get("takip_kodu")):
         auth_info = ""
         if scope.get("telefon"):
-            auth_info = f"Musteri telefonu {scope['telefon']} ile dogrulandi. Sadece bu numaraya ait siparisler sorgulanabilir."
+            auth_info = f"Müşteri telefonu {scope['telefon']} ile doğrulandı. Sadece bu numaraya ait siparişler sorgulanabilir."
         elif scope.get("takip_kodu"):
-            auth_info = f"Takip kodu {scope['takip_kodu']} ile dogrulandi. Sadece bu siparise erisim var."
+            auth_info = f"Takip kodu {scope['takip_kodu']} ile doğrulandı. Sadece bu siparişe erişim var."
         system_content = SYSTEM_PROMPT_AUTHENTICATED.format(auth_info=auth_info)
     else:
         system_content = SYSTEM_PROMPT

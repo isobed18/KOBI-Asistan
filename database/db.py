@@ -18,6 +18,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS products (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id       INTEGER NOT NULL DEFAULT 1,
             name            TEXT NOT NULL,
             category        TEXT,
             price           REAL NOT NULL,
@@ -32,6 +33,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id            INTEGER NOT NULL DEFAULT 1,
             tracking_code        TEXT UNIQUE,
             customer_name        TEXT NOT NULL,
             customer_phone       TEXT,
@@ -67,6 +69,50 @@ def init_db():
             current_status     TEXT NOT NULL,
             estimated_delivery TEXT,
             last_update        TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+
+    # İNSAN İNCELEME BİLETLERİ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tickets (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id           INTEGER NOT NULL DEFAULT 1,
+            type                TEXT NOT NULL,
+            priority            TEXT NOT NULL DEFAULT 'normal',
+            status              TEXT NOT NULL DEFAULT 'open',
+            title               TEXT NOT NULL,
+            description         TEXT,
+            llm_content         TEXT,
+            related_order_id    INTEGER,
+            related_product_id  INTEGER,
+            created_at          TEXT DEFAULT (datetime('now', 'localtime')),
+            resolved_at         TEXT
+        )
+    """)
+
+    # GÜNLÜK AI RAPORLARI
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS daily_reports (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            date        TEXT NOT NULL,
+            report_text TEXT NOT NULL,
+            raw_data    TEXT,
+            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+
+    # STOK HAREKETLERİ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stock_movements (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id  INTEGER NOT NULL,
+            delta       INTEGER NOT NULL,
+            reason      TEXT NOT NULL DEFAULT 'manuel',
+            note        TEXT,
+            before_qty  INTEGER,
+            after_qty   INTEGER,
+            created_at  TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (product_id) REFERENCES products(id)
         )
     """)
 

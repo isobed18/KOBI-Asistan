@@ -1,0 +1,159 @@
+Amacımız: Hackathon’da jüriyi etkileyecek, KOBİ’ler için gerçekçi, düşük maliyetli, yüksek değerli bir çözüm sunmak. LLM’yi sadece katma değeri yüksek yerlerde kullanacağız. Geri kalan her şeyi rule-based, cache’li, direkt DB query ile halledeceğiz.
+1. LLM Kullanım Stratejisi (Maliyet + Hız Optimizasyonu)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SenaryoLLM Kullan?AlternatifGerekçeMüşteri basit sorgu ("Siparişim nerede?")Hayır (Intent Classifier)Direkt tool call100ms yanıt, sıfır LLM maliyetiSipariş / Stok / Kargo durumuHayırDirekt tool + template cevapHız kritikGünlük / Haftalık raporEvet (APScheduler)-Yüksek katma değerKritik stok önerisiEvet (düşük frekans)-LLM iyi öneri yaparMüşteri iptal / şikayet / özel talepEvet (ticket oluştururken)-Doğal dil özeti + taslakKargo gecikmesi bildirimiHayırTemplate + değişkenlerBoilerplate yeterliTedarikçi sipariş mail taslağıEvet-Profesyonel ve kişiselleştirilmişDashboard InsightsEvet (on-demand + scheduled)-Satıcıya en büyük değer
+Kural: LLM çağrısı sadece "düşünme / özetleme / yaratıcılık" gereken yerlerde olsun.
+
+2. SATICI (İşletme Sahibi / Yönetici) İçin Sunacağımız Değer
+Satıcı şu an günde 2-3 saat manuel iş yapıyor. Biz bunu 15-20 dakikaya düşürmeliyiz.
+React Dashboard — Ana Sayfalar
+A. Overview / Sabah Paneli (İlk açılan)
+
+Günlük özet kartları (sipariş adedi, ciro, bekleyen paket, kritik stok)
+LLM Daily Briefing (sabah 08:00 APScheduler ile üretilir)
+Riskli durumlar (geciken kargo, düşük stok, iptal talepleri)
+
+B. Sipariş Yönetimi (Task 2)
+
+Tüm siparişler tablosu + filtre
+Detay modalı
+Human-in-the-Loop:
+İptal taleplerini onayla/reddet
+Durum manuel güncelle
+Müşteriye not / özel mesaj gönder
+
+
+C. Kargo Yönetimi (Task 3)
+
+Kargo dashboard’u (renk kodlu: Yeşil=normal, Sarı=gecikme riski, Kırmızı=gecikmiş)
+Toplu işlem (seçili kargolara bildirim gönder)
+Gecikme tespiti + otomatik rapor
+
+D. Stok & Envanter (Task 4)
+
+Ürün listesi + anlık stok + uyarılar
+Düşük stok → LLM Yeniden Sipariş Önerisi (geçmiş satışlara göre miktar + tedarikçi taslağı)
+Stok hareket geçmişi
+
+E. Analitik & İçgörü (Task 6)
+
+Grafikler (satış trendi, ürün performansı)
+LLM-powered Insights (aylık/haftalık)
+Rapor export (PDF + Excel)
+
+F. Ticket / Human Review Paneli
+
+Müşteriden gelen iptal, iade, şikayet talepleri
+Agent’in çözemediği konular
+
+
+3. Otomasyon ve Human-in-the-Loop Akışları
+Otomatik Yapılacaklar (LLM’siz veya minimum LLM):
+
+Sabah 08:00 → Günlük özet + kritik stok bildirimi (Telegram + Dashboard)
+4 saatte bir → Kargo gecikme taraması
+Stok eşiğinin altına düşünce → Bildirim + öneri
+Yeni sipariş geldiğinde → Müşteriye otomatik onay mesajı (template)
+Kargo durumu değiştiğinde → Müşteriye otomatik güncelleme (template)
+
+Human-in-the-Loop Gerekenler (LLM destekli):
+
+Müşteri iptal talebi → Agent ticket oluşturur + LLM özet yazar → Satıcı onaylar
+İade talebi
+Özel indirim / promosyon talebi
+Hasarlı ürün şikayeti
+Tedarikçi siparişi onayı (LLM miktar önerir, satıcı onaylar)
+Büyük tutarlı siparişlerde manuel onay
+
+
+4. Multi-Tenant Stratejisi (KOBİ’ler için)
+Şimdi yapmayın → Hackathon sonrası düşünün.
+Hackathon için:
+
+Tek işletme (single tenant) yeterli.
+Kodda tenant_id kolonu ekleyin (geleceğe hazır olsun).
+Dashboard ve agent’larda tenant_id filtrelemesi yapın.
+
+Gerçek multi-tenant:
+
+YAML config (her KOBİ kendi prompt kişiselleştirmesi, logo, kuralları)
+Ayrı DB schema veya tenant_id bazlı row-level security
+
+
+5. Genel Sistem Mimari Önerisi (Optimize Edilmiş)
+#mermaid-diagram-mermaid-xgrvk2i{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;fill:#ccc;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#mermaid-diagram-mermaid-xgrvk2i .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#mermaid-diagram-mermaid-xgrvk2i .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#mermaid-diagram-mermaid-xgrvk2i .error-icon{fill:#a44141;}#mermaid-diagram-mermaid-xgrvk2i .error-text{fill:#ddd;stroke:#ddd;}#mermaid-diagram-mermaid-xgrvk2i .edge-thickness-normal{stroke-width:1px;}#mermaid-diagram-mermaid-xgrvk2i .edge-thickness-thick{stroke-width:3.5px;}#mermaid-diagram-mermaid-xgrvk2i .edge-pattern-solid{stroke-dasharray:0;}#mermaid-diagram-mermaid-xgrvk2i .edge-thickness-invisible{stroke-width:0;fill:none;}#mermaid-diagram-mermaid-xgrvk2i .edge-pattern-dashed{stroke-dasharray:3;}#mermaid-diagram-mermaid-xgrvk2i .edge-pattern-dotted{stroke-dasharray:2;}#mermaid-diagram-mermaid-xgrvk2i .marker{fill:lightgrey;stroke:lightgrey;}#mermaid-diagram-mermaid-xgrvk2i .marker.cross{stroke:lightgrey;}#mermaid-diagram-mermaid-xgrvk2i svg{font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:16px;}#mermaid-diagram-mermaid-xgrvk2i p{margin:0;}#mermaid-diagram-mermaid-xgrvk2i .label{font-family:"trebuchet ms",verdana,arial,sans-serif;color:#ccc;}#mermaid-diagram-mermaid-xgrvk2i .cluster-label text{fill:#F9FFFE;}#mermaid-diagram-mermaid-xgrvk2i .cluster-label span{color:#F9FFFE;}#mermaid-diagram-mermaid-xgrvk2i .cluster-label span p{background-color:transparent;}#mermaid-diagram-mermaid-xgrvk2i .label text,#mermaid-diagram-mermaid-xgrvk2i span{fill:#ccc;color:#ccc;}#mermaid-diagram-mermaid-xgrvk2i .node rect,#mermaid-diagram-mermaid-xgrvk2i .node circle,#mermaid-diagram-mermaid-xgrvk2i .node ellipse,#mermaid-diagram-mermaid-xgrvk2i .node polygon,#mermaid-diagram-mermaid-xgrvk2i .node path{fill:#1f2020;stroke:#ccc;stroke-width:1px;}#mermaid-diagram-mermaid-xgrvk2i .rough-node .label text,#mermaid-diagram-mermaid-xgrvk2i .node .label text,#mermaid-diagram-mermaid-xgrvk2i .image-shape .label,#mermaid-diagram-mermaid-xgrvk2i .icon-shape .label{text-anchor:middle;}#mermaid-diagram-mermaid-xgrvk2i .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#mermaid-diagram-mermaid-xgrvk2i .rough-node .label,#mermaid-diagram-mermaid-xgrvk2i .node .label,#mermaid-diagram-mermaid-xgrvk2i .image-shape .label,#mermaid-diagram-mermaid-xgrvk2i .icon-shape .label{text-align:center;}#mermaid-diagram-mermaid-xgrvk2i .node.clickable{cursor:pointer;}#mermaid-diagram-mermaid-xgrvk2i .root .anchor path{fill:lightgrey!important;stroke-width:0;stroke:lightgrey;}#mermaid-diagram-mermaid-xgrvk2i .arrowheadPath{fill:lightgrey;}#mermaid-diagram-mermaid-xgrvk2i .edgePath .path{stroke:lightgrey;stroke-width:2.0px;}#mermaid-diagram-mermaid-xgrvk2i .flowchart-link{stroke:lightgrey;fill:none;}#mermaid-diagram-mermaid-xgrvk2i .edgeLabel{background-color:hsl(0, 0%, 34.4117647059%);text-align:center;}#mermaid-diagram-mermaid-xgrvk2i .edgeLabel p{background-color:hsl(0, 0%, 34.4117647059%);}#mermaid-diagram-mermaid-xgrvk2i .edgeLabel rect{opacity:0.5;background-color:hsl(0, 0%, 34.4117647059%);fill:hsl(0, 0%, 34.4117647059%);}#mermaid-diagram-mermaid-xgrvk2i .labelBkg{background-color:rgba(87.75, 87.75, 87.75, 0.5);}#mermaid-diagram-mermaid-xgrvk2i .cluster rect{fill:hsl(180, 1.5873015873%, 28.3529411765%);stroke:rgba(255, 255, 255, 0.25);stroke-width:1px;}#mermaid-diagram-mermaid-xgrvk2i .cluster text{fill:#F9FFFE;}#mermaid-diagram-mermaid-xgrvk2i .cluster span{color:#F9FFFE;}#mermaid-diagram-mermaid-xgrvk2i div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"trebuchet ms",verdana,arial,sans-serif;font-size:12px;background:hsl(20, 1.5873015873%, 12.3529411765%);border:1px solid rgba(255, 255, 255, 0.25);border-radius:2px;pointer-events:none;z-index:100;}#mermaid-diagram-mermaid-xgrvk2i .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#ccc;}#mermaid-diagram-mermaid-xgrvk2i rect.text{fill:none;stroke-width:0;}#mermaid-diagram-mermaid-xgrvk2i .icon-shape,#mermaid-diagram-mermaid-xgrvk2i .image-shape{background-color:hsl(0, 0%, 34.4117647059%);text-align:center;}#mermaid-diagram-mermaid-xgrvk2i .icon-shape p,#mermaid-diagram-mermaid-xgrvk2i .image-shape p{background-color:hsl(0, 0%, 34.4117647059%);padding:2px;}#mermaid-diagram-mermaid-xgrvk2i .icon-shape rect,#mermaid-diagram-mermaid-xgrvk2i .image-shape rect{opacity:0.5;background-color:hsl(0, 0%, 34.4117647059%);fill:hsl(0, 0%, 34.4117647059%);}#mermaid-diagram-mermaid-xgrvk2i :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}EvetHayırMüşteri - Telegram/WebIntent ClassifierSimple Query?Direkt Tool Call + Template ResponsePrompt Police → Auth → LangGraph AgentTool ExecutionSatici DashboardAPScheduler JobsLLM Report GeneratorDB + Cache
+Maliyet Düşürme Teknikleri:
+
+Intent Classifier (sentence-transformers veya basit regex) → %70-80 sorguyu LLM’siz hallet
+Response Caching (aynı sipariş sorgusu 5 dk cache’li)
+Template Cevaplar (kargo güncellemesi, stok bilgisi)
+Lightweight model (Qwen3.5 14B veya 9B) raporlama için
+Async + background job ile LLM çağrılarını yoğun olmayan saatlere at
+
+
+Özetle Satıcıya Sunacağımız Değer:
+
+Sabah uyanınca tek bakışta iş durumu
+Sorunlar büyümeden haber alma
+Tekrarlayan işlerden kurtulma
+Karar alma desteği (LLM içgörüleri)
+Ekip için otomatik görev dağılımı
+Müşteri deneyimini profesyonel hale getirme
