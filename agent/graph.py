@@ -20,7 +20,7 @@ from agent.state import KobiAgentState
 from agent.state_runtime import set_channel_context
 from agent.tenant_config import get_tenant_by_id, tenant_prompt_block
 from agent.tenant_context import get_tenant_id, set_tenant_id
-from config import settings
+from config import settings, normalize_llm_provider
 from tools.kargo_tools import kargo_takip
 from tools.order_product_tools import (
     create_ticket,
@@ -39,13 +39,47 @@ def _create_llm(
     provider: str | None = None,
     model: str | None = None,
 ):
-    provider_name = (provider or settings.LLM_PROVIDER).lower()
+    settings_prov = normalize_llm_provider(settings.LLM_PROVIDER)
+    tenant_prov = normalize_llm_provider(provider or settings.LLM_PROVIDER or "ollama")
+    # Demo tenant YAML still defaults to ollama; honor .env when a hosted provider is configured.
+    if settings_prov != "ollama":
+        provider_name = settings_prov
+    else:
+        provider_name = tenant_prov
+
+    if provider_name == "gemini":
+        resolved_model = (
+            model
+            if (model and str(model).lower().startswith("gemini"))
+            else settings.GEMINI_MODEL
+        )
+    elif provider_name == "openai":
+        resolved_model = (
+            model
+            if (
+                model
+                and (
+                    str(model).lower().startswith("gpt")
+                    or str(model).lower().startswith("o1")
+                    or str(model).lower().startswith("o3")
+                )
+            )
+            else settings.OPENAI_MODEL
+        )
+    elif provider_name == "anthropic":
+        resolved_model = (
+            model
+            if (model and str(model).lower().startswith("claude"))
+            else settings.ANTHROPIC_MODEL
+        )
+    else:
+        resolved_model = model or settings.OLLAMA_MODEL
 
     if provider_name == "openai":
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=model or settings.OPENAI_MODEL,
+            model=resolved_model,
             temperature=temperature,
             api_key=settings.OPENAI_API_KEY,
         )
@@ -53,7 +87,7 @@ def _create_llm(
         from langchain_anthropic import ChatAnthropic
 
         return ChatAnthropic(
-            model=model or settings.ANTHROPIC_MODEL,
+            model=resolved_model,
             temperature=temperature,
             api_key=settings.ANTHROPIC_API_KEY,
         )
@@ -61,7 +95,7 @@ def _create_llm(
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model=model or settings.GEMINI_MODEL,
+            model=resolved_model,
             temperature=temperature,
             google_api_key=settings.GEMINI_API_KEY,
         )
@@ -69,7 +103,7 @@ def _create_llm(
     from langchain_ollama import ChatOllama
 
     return ChatOllama(
-        model=model or settings.OLLAMA_MODEL,
+        model=resolved_model,
         base_url=settings.OLLAMA_BASE_URL,
         temperature=temperature,
     )

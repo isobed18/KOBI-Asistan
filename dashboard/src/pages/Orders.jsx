@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   createOrder,
   deleteOrder,
@@ -22,6 +23,13 @@ const STATUS_TABS = [
 ]
 
 const STATUSES = STATUS_TABS.filter(t => t.key !== 'all').map(t => t.key)
+
+function readOrdersTabFromSearchParams(sp) {
+  const raw = (sp.get('tab') || sp.get('status') || 'all').trim()
+  if (raw === 'all') return 'all'
+  if (STATUS_TABS.some(t => t.key === raw)) return raw
+  return 'all'
+}
 
 function isTerminalCompletedStatus(status) {
   return status === 'tamamlandı' || status === 'tamamlandi'
@@ -641,12 +649,28 @@ function OrderDetailDrawer({ order, products, onClose, onUpdated }) {
 }
 
 export default function Orders() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = useMemo(() => readOrdersTabFromSearchParams(searchParams), [searchParams])
+  const setTab = useCallback(
+    (key) => {
+      const next = new URLSearchParams(searchParams)
+      if (key === 'all') {
+        next.delete('tab')
+        next.delete('status')
+      } else {
+        next.set('tab', key)
+        next.delete('status')
+      }
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [tabCounts, setTabCounts] = useState({ all: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [tab, setTab] = useState('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState(null)

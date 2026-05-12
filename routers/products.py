@@ -8,6 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from database.db import get_connection
 from database.schemas import ProductCreate, ProductPatch, StockUpdateRequest
 from agent.tenant_context import get_tenant_id
+from repositories.products import deactivate_product as repo_deactivate_product
+from repositories.products import patch_product as repo_patch_product
 
 router = APIRouter(prefix="/products", tags=["Ürünler"])
 
@@ -90,82 +92,11 @@ def patch_product(product_id: int, body: ProductPatch):
     if not data:
         raise HTTPException(status_code=400, detail="Güncellenecek alan yok.")
 
-    if "name" in data and not (data["name"] or "").strip():
-        raise HTTPException(status_code=400, detail="Ürün adı boş olamaz.")
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    row = cursor.execute(
-        "SELECT * FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
-        (product_id, get_tenant_id()),
-    ).fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail=f"Ürün #{product_id} bulunamadı.")
-
-    current = dict(row)
-    old_stock = int(current["stock_quantity"])
-
-    if "stock_quantity" in data:
-        new_sq = int(data["stock_quantity"])
-        if new_sq < 0:
-            conn.close()
-            raise HTTPException(status_code=400, detail="Stok miktarı 0'ın altına düşemez.")
-
-    if "low_stock_threshold" in data and int(data["low_stock_threshold"]) < 0:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Eşik değeri negatif olamaz.")
-
-    if "price" in data and float(data["price"]) < 0:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Fiyat negatif olamaz.")
-
-    sets = []
-    params: list = []
-    for key in ("name", "category", "price", "stock_quantity", "low_stock_threshold"):
-        if key not in data:
-            continue
-        sets.append(f"{key} = ?")
-        val = data[key]
-        if key == "category":
-            params.append(val if val is not None else None)
-        elif key in ("price",):
-            params.append(float(val))
-        else:
-            params.append(int(val) if key != "name" else (val or "").strip())
-
-    params.extend([product_id, get_tenant_id()])
-    cursor.execute(
-        f"UPDATE products SET {', '.join(sets)} WHERE id = ? AND tenant_id = ?",
-        params,
-    )
-
-    if "stock_quantity" in data:
-        new_stock = int(data["stock_quantity"])
-        delta = new_stock - old_stock
-        if delta != 0:
-            cursor.execute(
-                """
-                INSERT INTO stock_movements (tenant_id, product_id, delta, reason, before_qty, after_qty)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    get_tenant_id(),
-                    product_id,
-                    delta,
-                    "tablo duzenleme",
-                    old_stock,
-                    new_stock,
-                ),
-            )
-
-    conn.commit()
-    updated = cursor.execute(
-        "SELECT * FROM products WHERE id = ? AND tenant_id = ?",
-        (product_id, get_tenant_id()),
-    ).fetchone()
-    conn.close()
-    return _add_low_stock_flag(dict(updated))
+    out = repo_patch_product(product_id, get_tenant_id(), data)
+    if out.get("hata"):
+        code = 404 if "bulunamadi" in (out["hata"] or "").lower() else 400
+        raise HTTPException(status_code=code, detail=out["hata"])
+    return _add_low_stock_flag(dict(out["urun"]))
 
 
 #  PATCH /products/{id}/stock
@@ -233,16 +164,7 @@ def stock_movements(product_id: int, limit: int = 50):
 # DELETE /products/{id} (soft delete)
 @router.delete("/{product_id}", summary="Ürünü pasife al")
 def deactivate_product(product_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-    row = cursor.execute(
-        "SELECT id FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
-        (product_id, get_tenant_id())
-    ).fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail=f"Ürün #{product_id} bulunamadı.")
-    cursor.execute("UPDATE products SET is_active = 0 WHERE id = ? AND tenant_id = ?", (product_id, get_tenant_id()))
-    conn.commit()
-    conn.close()
+    out = repo_deactivate_product(product_id, get_tenant_id())
+    if out.get("hata"):
+        raise HTTPException(status_code=404, detail=out["hata"])
     return {"message": f"Ürün #{product_id} pasife alındı."}

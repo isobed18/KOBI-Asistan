@@ -24,9 +24,10 @@ def build_briefing_json(raw_data: dict, report_text: str) -> str:
                 break
 
     kpis: dict[str, Any] = {
-        "toplam_siparis": ozet.get("toplam_siparis"),
-        "toplam_gelir": ozet.get("toplam_gelir"),
+        "toplam_siparis": ozet.get("siparis_sayisi_bugun", ozet.get("toplam_siparis")),
+        "toplam_gelir": ozet.get("gelir_bugun_try", ozet.get("toplam_gelir")),
         "kritik_stok_sayisi": ozet.get("kritik_stok_sayisi"),
+        "bugun_tarihi": ozet.get("bugun_tarihi"),
     }
     durum = ozet.get("durum_dagilimi")
     if isinstance(durum, dict):

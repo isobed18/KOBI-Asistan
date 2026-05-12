@@ -86,6 +86,11 @@ export const getTodayReport = () => req('/reports/latest/today')
 // Admin Chat
 export const adminChat = (mesaj, session_id) =>
   req('/api/v1/admin/chat', { method: 'POST', body: JSON.stringify({ mesaj, session_id }) })
+export const confirmAdminPending = (onay_token, session_id) =>
+  req('/api/v1/admin/pending/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ onay_token, session_id }),
+  })
 export const clearAdminSession = (session_id) =>
   req(`/api/v1/admin/chat/${session_id}`, { method: 'DELETE' })
 

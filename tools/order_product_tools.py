@@ -309,44 +309,89 @@ def create_ticket(
     }
 
 
+def _fmt_try_tr(n: float) -> str:
+    """Turkce binlik ayraci: 174149.61 -> 174.149,61"""
+    neg = n < 0
+    x = abs(float(n))
+    whole, frac = f"{x:.2f}".split(".")
+    parts: list[str] = []
+    while whole:
+        parts.append(whole[-3:])
+        whole = whole[:-3]
+    whole_g = ".".join(reversed(parts))
+    s = f"{whole_g},{frac}"
+    return ("-" if neg else "") + s
+
+
 @tool
 def gunluk_ozet(tenant_id: int | None = None) -> dict:
-    """Gunluk siparis durumu, gelir ve kritik stok ozetini getirir.
-    Yonetici 'bugunku durum nedir?' dediginde bu tool kullanilir."""
+    """Bugunku (yerel tarih) siparis sayisi, durum dagilimi, bugunku ciro ve guncel kritik stok.
+
+    Sadece bugun `created_at` tarihli siparisler sayilir; gelir iptaller haric toplam tutardir.
+    Yonetici 'bugunku ozet' dediginde bu tool kullanilir."""
+
+    from datetime import date
 
     tid = int(tenant_id) if tenant_id is not None else int(get_tenant_id() or 1)
+    bugun = date.today().isoformat()
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    siparisler = cursor.execute(
-        "SELECT status, total_price FROM orders WHERE tenant_id = ?", (tid,)
+    rows = cursor.execute(
+        """
+        SELECT status,
+               COUNT(*) AS c,
+               COALESCE(SUM(CASE WHEN status != 'iptal' THEN total_price ELSE 0 END), 0) AS rev
+        FROM orders
+        WHERE tenant_id = ? AND date(created_at) = date('now', 'localtime')
+        GROUP BY status
+        """,
+        (tid,),
     ).fetchall()
-    by_status = {}
-    gelir = 0.0
-    for s in siparisler:
-        by_status[s["status"]] = by_status.get(s["status"], 0) + 1
-        if s["total_price"] and s["status"] not in ("iptal",):
-            gelir += s["total_price"]
+
+    by_status: dict[str, int] = {}
+    gelir_bugun = 0.0
+    siparis_bugun = 0
+    for r in rows:
+        s = r["status"]
+        c = int(r["c"] or 0)
+        rev = float(r["rev"] or 0)
+        by_status[s] = c
+        siparis_bugun += c
+        gelir_bugun += rev
 
     kritik = cursor.execute("""
-        SELECT name, stock_quantity FROM products
+        SELECT name, stock_quantity, low_stock_threshold FROM products
         WHERE stock_quantity <= low_stock_threshold AND is_active = 1 AND tenant_id = ?
+        ORDER BY stock_quantity ASC
     """, (tid,)).fetchall()
 
     conn.close()
 
+    durum_parts = [f"{d}: {adet}" for d, adet in sorted(by_status.items()) if adet > 0]
+    durum_str = ", ".join(durum_parts) if durum_parts else "bugün yeni sipariş kaydı yok"
+
+    gelir_fmt = _fmt_try_tr(gelir_bugun)
+    ozet_metin = (
+        f"**Bugün ({bugun})** oluşturulan **{siparis_bugun}** sipariş var. "
+        f"**Bugünkü ciro** (iptaller hariç): **{gelir_fmt} TL**. "
+        f"Durumlara göre: {durum_str}. "
+        f"**{len(kritik)}** ürün şu an kritik stok seviyesinde."
+    )
+
     return {
         "tenant_id": tid,
-        "toplam_siparis": len(siparisler),
+        "bugun_tarihi": bugun,
+        "siparis_sayisi_bugun": siparis_bugun,
+        "gelir_bugun_try": round(gelir_bugun, 2),
+        "durum_dagilimi_bugun": by_status,
+        # Geriye donuk alanlar: artik *bugunun* siparis/ cirosu anlamina gelir
+        "toplam_siparis": siparis_bugun,
         "durum_dagilimi": by_status,
-        "toplam_gelir": gelir,
+        "toplam_gelir": round(gelir_bugun, 2),
         "kritik_stok_sayisi": len(kritik),
         "kritik_urunler": [r["name"] for r in kritik],
-        "ozet_metin": (
-            f"Toplam {len(siparisler)} siparis var. "
-            f"{by_status.get('hazırlanıyor', 0)} siparis hazirlaniyor, "
-            f"{by_status.get('kargoda', 0)} siparis kargoda. "
-            f"{len(kritik)} urun kritik stok seviyesinde."
-        )
+        "kritik_urunler_detay": [dict(r) for r in kritik],
+        "ozet_metin": ozet_metin,
     }

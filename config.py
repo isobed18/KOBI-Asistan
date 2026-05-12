@@ -2,6 +2,16 @@ from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def normalize_llm_provider(name: str | None) -> str:
+    """`.env` / tenant YAML'da 'claude' veya 'google' yazıldığında dahili sağlayıcı adına çevirir."""
+    p = (name or "ollama").lower().strip()
+    if p in ("claude", "anthropic"):
+        return "anthropic"
+    if p in ("google", "google_genai", "google-genai"):
+        return "gemini"
+    return p
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -19,9 +29,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
-    # Anthropic
+    # Anthropic (.env'de CLAUDE_MODEL de kullanılabilir — .env.example ile uyum)
     ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
+    ANTHROPIC_MODEL: str = Field(
+        default="claude-haiku-4-5-20251001",
+        validation_alias=AliasChoices("ANTHROPIC_MODEL", "CLAUDE_MODEL"),
+    )
 
     # Gemini (.env'de GOOGLE_API_KEY veya GEMINI_API_KEY kullanılabilir)
     GEMINI_API_KEY: str = Field(

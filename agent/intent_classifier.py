@@ -361,16 +361,17 @@ def _fmt_critical_stock(data: dict) -> str:
 
 def _fmt_daily_summary(data: dict) -> str:
     dist = data.get("durum_dagilimi", {})
+    bugun = data.get("bugun_tarihi") or ""
     lines = [
-        f"📊 *Günlük Özet*",
-        f"Toplam Sipariş: {data.get('toplam_siparis', 0)}",
+        f"📊 *Günlük özet*" + (f" — *{bugun}*" if bugun else ""),
+        f"Bugün oluşturulan sipariş: {data.get('toplam_siparis', 0)}",
     ]
     for durum, adet in dist.items():
         icons = {"hazırlanıyor": "⏳", "kargoda": "🚚", "teslim_edildi": "✅", "iptal": "❌"}
         lines.append(f"  {icons.get(durum, '•')} {durum}: {adet}")
-    lines.append(f"Toplam Gelir: ₺{data.get('toplam_gelir', 0):.2f}")
+    lines.append(f"Bugünkü ciro (iptaller hariç): ₺{data.get('toplam_gelir', 0):,.2f}")
     if data.get("kritik_stok_sayisi", 0) > 0:
-        lines.append(f"⚠️ Kritik Stok: {data['kritik_stok_sayisi']} ürün")
+        lines.append(f"⚠️ Kritik stok: {data['kritik_stok_sayisi']} ürün")
         for u in data.get("kritik_urunler", []):
             lines.append(f"  • {u}")
     return "\n".join(lines)

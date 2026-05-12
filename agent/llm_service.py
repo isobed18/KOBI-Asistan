@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from langchain_core.messages import HumanMessage
-from config import settings
+from config import settings, normalize_llm_provider
 
 
 def _llm_connectivity_hint(exc: Exception) -> str:
@@ -22,7 +22,7 @@ def _llm_connectivity_hint(exc: Exception) -> str:
     errno = getattr(exc, "errno", None)
     if errno != 61 and "connection refused" not in msg and "failed to establish" not in msg:
         return ""
-    prov = getattr(settings, "LLM_PROVIDER", "ollama").lower()
+    prov = normalize_llm_provider(getattr(settings, "LLM_PROVIDER", None))
     if prov == "ollama":
         return (
             "\n\n---\n**İpucu:** `LLM_PROVIDER` şu an **ollama**; istek `OLLAMA_BASE_URL` "
@@ -35,7 +35,7 @@ def _llm_connectivity_hint(exc: Exception) -> str:
 
 def _create_llm(temperature: float = 0.3):
     """Provider-bağımsız LLM factory. LLM_PROVIDER env değişkeniyle kontrol edilir."""
-    provider = getattr(settings, "LLM_PROVIDER", "ollama").lower()
+    provider = normalize_llm_provider(getattr(settings, "LLM_PROVIDER", "ollama"))
 
     if provider == "openai":
         from langchain_openai import ChatOpenAI

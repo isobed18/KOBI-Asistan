@@ -50,16 +50,22 @@ def list_products(
     tenant_id: int = 1,
     category: str | None = None,
     critical_only: bool = False,
+    search: str | None = None,
     limit: int = 100,
 ) -> list[dict]:
     conn = get_connection()
     q = "SELECT * FROM products WHERE is_active = 1 AND tenant_id = ?"
     params: list = [tenant_id]
     if category:
-        q += " AND category = ?"; params.append(category)
+        q += " AND category = ?"
+        params.append(category)
     if critical_only:
         q += " AND stock_quantity <= low_stock_threshold"
-    q += " ORDER BY name ASC LIMIT ?"; params.append(limit)
+    if search and str(search).strip():
+        q += " AND name LIKE ?"
+        params.append(f"%{str(search).strip()}%")
+    q += " ORDER BY name ASC LIMIT ?"
+    params.append(limit)
     rows = conn.execute(q, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -136,4 +142,107 @@ def update_stock(product_id: int, delta: int, reason: str, tenant_id: int = 1) -
         "delta": int(delta),
         "neden": reason,
     }
+
+
+def patch_product(product_id: int, tenant_id: int, fields: dict) -> dict:
+    """Kısmi ürün güncellemesi; yalnızca `fields` içindeki anahtarlar güncellenir."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
+        (product_id, tenant_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return {"hata": f"Urun #{product_id} bulunamadi."}
+
+    current = dict(row)
+    old_stock = int(current["stock_quantity"])
+
+    if "name" in fields and not (fields.get("name") or "").strip():
+        conn.close()
+        return {"hata": "Urun adi bos olamaz."}
+    if "stock_quantity" in fields and int(fields["stock_quantity"]) < 0:
+        conn.close()
+        return {"hata": "Stok miktari 0'in altina dusemez."}
+    if "low_stock_threshold" in fields and int(fields["low_stock_threshold"]) < 0:
+        conn.close()
+        return {"hata": "Esik degeri negatif olamaz."}
+    if "price" in fields and float(fields["price"]) < 0:
+        conn.close()
+        return {"hata": "Fiyat negatif olamaz."}
+
+    sets: list[str] = []
+    params: list = []
+    if "name" in fields:
+        sets.append("name = ?")
+        params.append((fields["name"] or "").strip())
+    if "category" in fields:
+        sets.append("category = ?")
+        v = fields["category"]
+        params.append(v if v is not None else None)
+    if "price" in fields:
+        sets.append("price = ?")
+        params.append(float(fields["price"]))
+    if "stock_quantity" in fields:
+        sets.append("stock_quantity = ?")
+        params.append(int(fields["stock_quantity"]))
+    if "low_stock_threshold" in fields:
+        sets.append("low_stock_threshold = ?")
+        params.append(int(fields["low_stock_threshold"]))
+
+    if not sets:
+        conn.close()
+        return {"hata": "Guncellenecek alan yok."}
+
+    params.extend([product_id, tenant_id])
+    conn.execute(
+        f"UPDATE products SET {', '.join(sets)} WHERE id = ? AND tenant_id = ?",
+        params,
+    )
+
+    if "stock_quantity" in fields:
+        new_stock = int(fields["stock_quantity"])
+        delta = new_stock - old_stock
+        if delta != 0:
+            conn.execute(
+                """
+                INSERT INTO stock_movements (tenant_id, product_id, delta, reason, before_qty, after_qty)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    tenant_id,
+                    product_id,
+                    delta,
+                    "tablo duzenleme",
+                    old_stock,
+                    new_stock,
+                ),
+            )
+
+    conn.commit()
+    updated = conn.execute(
+        "SELECT * FROM products WHERE id = ? AND tenant_id = ?",
+        (product_id, tenant_id),
+    ).fetchone()
+    conn.close()
+    return {"basari": True, "urun": dict(updated)}
+
+
+def deactivate_product(product_id: int, tenant_id: int) -> dict:
+    """Soft delete (is_active = 0)."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT id, name FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
+        (product_id, tenant_id),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return {"hata": f"Urun #{product_id} bulunamadi."}
+    conn.execute(
+        "UPDATE products SET is_active = 0 WHERE id = ? AND tenant_id = ?",
+        (product_id, tenant_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"basari": True, "urun_id": product_id, "isim": row["name"]}
 

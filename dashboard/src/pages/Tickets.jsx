@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getTickets, updateTicketStatus } from '../api.js'
 import StatusBadge, { TICKET_STATUS, TICKET_TYPE, TICKET_PRIORITY } from '../components/StatusBadge.jsx'
 
@@ -82,6 +83,14 @@ function LLMContent({ raw, type }) {
   )
 }
 
+const TICKET_TAB_KEYS = new Set(['open', 'in_progress', 'resolved', 'all'])
+
+function readTicketTabFromSearchParams(sp) {
+  const raw = (sp.get('tab') || '').trim()
+  if (!raw) return 'open'
+  return TICKET_TAB_KEYS.has(raw) ? raw : 'open'
+}
+
 function TicketCard({ ticket, onUpdated }) {
   const [loading, setLoading] = useState(false)
 
@@ -142,10 +151,24 @@ function TicketCard({ ticket, onUpdated }) {
 }
 
 export default function Tickets() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = useMemo(() => readTicketTabFromSearchParams(searchParams), [searchParams])
+  const setTab = useCallback(
+    (key) => {
+      const next = new URLSearchParams(searchParams)
+      if (key === 'open') {
+        next.delete('tab')
+      } else {
+        next.set('tab', key)
+      }
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
   const [tickets, setTickets]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
-  const [tab, setTab]           = useState('open')
   const [typeFilter, setTypeFilter] = useState('')
 
   const load = () => {
