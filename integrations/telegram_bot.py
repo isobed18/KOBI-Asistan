@@ -1,178 +1,457 @@
 """
-Telegram Bot - Interaktif Menu + State Machine + Rate Limiting
+Telegram Bot — Musteri FSM (siparis, urun, sepet, iptal)
 """
 
+import json
 import re
 import time
 from collections import defaultdict
+from datetime import datetime
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
     filters,
 )
-from langchain_core.messages import HumanMessage
 
-from agent.graph import agent_graph
-from agent.guard import check_message
 from agent.auth import (
-    set_session_scope,
     activate_scope,
+    set_session_scope,
     validate_phone,
     validate_tracking_code,
 )
-from agent.intent_classifier import classify, fast_response, IntentResult
+from agent.guard import check_message
 from integrations.channels.telegram_adapter import TelegramAdapter
 from config import settings
+from repositories.products import list_products, normalize_name
+from repositories.tickets import (
+    create_ticket as repo_create_ticket,
+    has_open_telegram_order_request,
+)
+from tools.order_product_tools import musteri_siparisleri, siparis_sorgula
 
 telegram_app = None
 adapter = TelegramAdapter()
 
-# ---------------------------------------------------------------------------
-# Durum Sabitleri
-# ---------------------------------------------------------------------------
-S_MENU          = "menu"
-S_WAITING_PHONE = "waiting_phone"
-S_WAITING_ORDER = "waiting_order"
-S_WAITING_PROD  = "waiting_product"
-S_WAITING_CANCEL= "waiting_cancel"
-S_WAITING_OTP   = "waiting_otp"    # OTP dogrulama bekleniyor
-S_FREE_CHAT     = "free_chat"
+TENANT_ID = 1
+PRODUCTS_PAGE = 5
 
 # ---------------------------------------------------------------------------
-# Rate Limiting
+# Durumlar
+# ---------------------------------------------------------------------------
+S_MENU = "menu"
+S_WAIT_ORDER_DETAIL = "wait_order_detail"
+S_ORDER_NAME = "order_name"
+S_ORDER_PHONE = "order_phone"
+S_CANCEL_REF = "cancel_ref"
+S_CANCEL_NAME = "cancel_name"
+S_CANCEL_PHONE = "cancel_phone"
+
+# ---------------------------------------------------------------------------
+# Rate limit
 # ---------------------------------------------------------------------------
 _rate: dict = defaultdict(list)
-MAX_PER_MIN  = 10
+MAX_PER_MIN = 10
 MAX_PER_HOUR = 40
+
 
 def _rate_ok(uid: int):
     now = time.time()
     _rate[uid] = [t for t in _rate[uid] if now - t < 3600]
-    per_min  = sum(1 for t in _rate[uid] if now - t < 60)
+    per_min = sum(1 for t in _rate[uid] if now - t < 60)
     per_hour = len(_rate[uid])
-    if per_min  >= MAX_PER_MIN:
+    if per_min >= MAX_PER_MIN:
         return False, "Cok fazla istek. 1 dakika bekleyin."
     if per_hour >= MAX_PER_HOUR:
         return False, "Saatlik limit doldu. Daha sonra deneyin."
     _rate[uid].append(now)
     return True, ""
 
-# ---------------------------------------------------------------------------
-# UI
-# ---------------------------------------------------------------------------
-MENU_TEXT = (
-    "Hosgeldiniz! Ne yapmak istersiniz?\n"
-    "Asagidaki seceneklerden birini secin veya dogrudan yazin."
-)
-
-MENU_KB = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("Siparis Durumu",  callback_data="siparis_durumu"),
-        InlineKeyboardButton("Siparislerim",    callback_data="siparislerim"),
-    ],
-    [
-        InlineKeyboardButton("Kargo Takibi",    callback_data="kargo_takip"),
-        InlineKeyboardButton("Iptal Talebi",    callback_data="iptal_talebi"),
-    ],
-    [
-        InlineKeyboardButton("Stok Sorgula",   callback_data="stok_sorgu"),
-        InlineKeyboardButton("Gunluk Ozet",    callback_data="gunluk_ozet"),
-    ],
-    [InlineKeyboardButton("Serbest Soru",      callback_data="serbest_soru")],
-])
-
-BACK_KB = InlineKeyboardMarkup([[InlineKeyboardButton("Ana Menu", callback_data="back_menu")]])
 
 def _sess(update: Update) -> str:
     inbound = adapter.parse_update(update)
     return f"tg_{inbound.channel_user_id}"
 
+
 def _ud(context) -> dict:
     d = context.user_data
     d.setdefault("state", S_MENU)
-    d.setdefault("intent", None)
     d.setdefault("telefon", None)
     d.setdefault("takip_kodu", None)
-    d.setdefault("pending_action", None)
-    d.setdefault("otp_order_id", None)   # OTP akışındaki sipariş no
+    d.setdefault("cart", {})
+    d.setdefault("product_page", 0)
+    d.setdefault("pending_name", None)
+    d.setdefault("cancel_order_id", None)
+    d.setdefault("cancel_name", None)
     return d
 
-async def _menu(update: Update, context, text=MENU_TEXT):
-    ud = _ud(context)
-    ud["state"]  = S_MENU
-    ud["intent"] = None
-    ud["pending_action"] = None
-    target = update.callback_query.message if update.callback_query else update.message
-    await target.reply_text(text, reply_markup=MENU_KB)
 
-async def _reply(update: Update, text: str, kb=None):
-    target = update.callback_query.message if update.callback_query else update.message
+def _normalize_phone(raw: str) -> str | None:
+    s = re.sub(r"\s+", "", (raw or "").strip())
+    m = re.fullmatch(r"(05\d{9})", s)
+    return m.group(1) if m else None
+
+
+def _phone_match(a: str | None, b: str | None) -> bool:
+    da = "".join(c for c in (a or "") if c.isdigit())
+    db = "".join(c for c in (b or "") if c.isdigit())
+    return bool(da) and da == db
+
+
+def _extract_sip(text: str) -> str | None:
+    m = re.search(r"(SIP-[A-Z0-9]{6})", text, re.IGNORECASE)
+    return m.group(1).upper() if m else None
+
+
+def _extract_phone_token(text: str) -> str | None:
+    m = re.search(r"(05\d{9})", text)
+    return m.group(1) if m else None
+
+
+def _set_scope_phone(sess: str, ud: dict, phone: str):
+    ud["telefon"] = phone
+    ud["takip_kodu"] = None
+    set_session_scope(sess, telefon=phone)
+    activate_scope(sess)
+
+
+def _set_scope_sip(sess: str, ud: dict, code: str):
+    ud["takip_kodu"] = code
+    ud["telefon"] = None
+    set_session_scope(sess, takip_kodu=code)
+    activate_scope(sess)
+
+
+def _sync_scope_from_ud(sess: str, ud: dict):
+    """Session deposunu user_data ile esitler; siparis araclari icin zorunlu."""
+    if ud.get("telefon"):
+        set_session_scope(sess, telefon=ud["telefon"])
+    elif ud.get("takip_kodu"):
+        set_session_scope(sess, takip_kodu=ud["takip_kodu"])
+    else:
+        return
+    activate_scope(sess)
+
+
+def _has_scope(ud: dict) -> bool:
+    return bool(ud.get("telefon") or ud.get("takip_kodu"))
+
+
+def _product_stock(product_id: int) -> int:
+    from database.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT stock_quantity FROM products
+        WHERE id = ? AND tenant_id = ? AND is_active = 1
+        """,
+        (product_id, TENANT_ID),
+    ).fetchone()
+    conn.close()
+    return int(row["stock_quantity"]) if row else 0
+
+
+def _ticket_desc_lines_for_cart(ud: dict) -> str:
+    cart = ud.get("cart") or {}
+    if not cart:
+        return ""
+    from database.db import get_connection
+
+    conn = get_connection()
+    lines = []
+    try:
+        for k in sorted(cart.keys(), key=int):
+            pid = int(k)
+            qty = int(cart[k])
+            row = conn.execute(
+                "SELECT name, price FROM products WHERE id = ? AND tenant_id = ?",
+                (pid, TENANT_ID),
+            ).fetchone()
+            if row:
+                lines.append(
+                    f"  • #{pid} — {row['name']} x{qty} — {row['price'] * qty:.2f} TL"
+                )
+            else:
+                lines.append(f"  • #{pid} — (bulunamadi) x{qty}")
+    finally:
+        conn.close()
+    return "\n".join(lines)
+
+
+MENU_TEXT = (
+    "Hosgeldiniz! Asagidaki menuden secim yapin.\n"
+    "• Telefon (05XXXXXXXXX), SIP takip (SIP-XXXXXX) veya kargo takip kodunuzu yazarak da "
+    "ilgili siparis ozetine ulasabilirsiniz."
+)
+
+MENU_KB = InlineKeyboardMarkup(
+    [
+        [
+            InlineKeyboardButton("Siparislerim", callback_data="m:list"),
+            InlineKeyboardButton("Siparis detayi", callback_data="m:detay"),
+        ],
+        [
+            InlineKeyboardButton("Ürün Listesi", callback_data="m:urun_new"),
+            InlineKeyboardButton("Sepetim", callback_data="cart"),
+        ],
+        [
+            InlineKeyboardButton("Siparisi onayla", callback_data="chk"),
+            InlineKeyboardButton("Iptal talebi", callback_data="m:iptal"),
+        ],
+    ]
+)
+
+BACK_KB = InlineKeyboardMarkup([[InlineKeyboardButton("Ana menu", callback_data="m:home")]])
+
+
+async def _reply_text(target, text: str, kb=None):
     await target.reply_text(text, reply_markup=kb or BACK_KB)
 
-async def _ensure_auth(update, context, pending: str) -> bool:
+
+async def _menu_message(update: Update, context, text=MENU_TEXT):
     ud = _ud(context)
-    if ud.get("telefon") or ud.get("takip_kodu"):
-        sess = _sess(update)
-        if ud["telefon"]:
-            set_session_scope(sess, telefon=ud["telefon"])
-        else:
-            set_session_scope(sess, takip_kodu=ud["takip_kodu"])
-        activate_scope(sess)
-        return True
-    ud["state"] = S_WAITING_PHONE
-    ud["pending_action"] = pending
-    await _reply(update,
-        "Kimlik dogrulama gerekli.\n\n"
-        "Telefon numaranizi (05XXXXXXXXX) veya\n"
-        "Siparis takip kodunuzu (SIP-XXXXXX) girin:"
+    ud["state"] = S_MENU
+    if update.callback_query:
+        await update.callback_query.message.reply_text(text, reply_markup=MENU_KB)
+    else:
+        await update.message.reply_text(text, reply_markup=MENU_KB)
+
+
+def _fmt_orders(data: dict) -> str:
+    if data.get("hata"):
+        return f"Hata: {data['hata']}"
+    if data.get("mesaj") and not data.get("siparisler"):
+        return data["mesaj"]
+    lines = [f"{data.get('siparis_sayisi', 0)} siparis:"]
+    for s in data.get("siparisler", []):
+        lines.append(
+            f"• #{s['siparis_no']} ({s['takip_kodu']}) — {s['durum']} — {s.get('toplam', 0):.2f} TL"
+        )
+    return "\n".join(lines)
+
+
+def _fmt_order_detail(data: dict) -> str:
+    if data.get("hata"):
+        return f"Hata: {data['hata']}"
+    lines = [
+        f"Siparis #{data.get('siparis_no')}",
+        f"Takip: {data.get('takip_kodu')}",
+        f"Musteri: {data.get('musteri')}",
+        f"Durum: {data.get('durum_aciklamasi', data.get('durum'))}",
+    ]
+    if data.get("kargo_kodu"):
+        lines.append(f"Kargo: {data['kargo_kodu']} ({data.get('kargo_firmasi', '')})")
+    if data.get("urunler"):
+        lines.append("Ürün listesi:")
+        for u in data["urunler"]:
+            lines.append(f"  • {u['urun']} x{u['adet']} — {u['fiyat']:.2f} TL")
+    if data.get("toplam") is not None:
+        lines.append(f"Toplam: {data['toplam']:.2f} TL")
+    return "\n".join(lines)
+
+
+def _cart_lines(ud: dict) -> tuple[str, dict[int, int]]:
+    cart = ud.get("cart") or {}
+    if not cart:
+        return "Sepetiniz bos.", {}
+    conn_items = []
+    total = 0.0
+    by_id: dict[int, int] = {}
+    for k, qty in cart.items():
+        pid = int(k)
+        by_id[pid] = int(qty)
+    from database.db import get_connection
+
+    conn = get_connection()
+    try:
+        for pid, qty in sorted(by_id.items()):
+            row = conn.execute(
+                "SELECT name, price FROM products WHERE id = ? AND tenant_id = ? AND is_active = 1",
+                (pid, TENANT_ID),
+            ).fetchone()
+            if not row:
+                conn_items.append(f"• #{pid} — (bulunamadi) x{qty}")
+                continue
+            sub = row["price"] * qty
+            total += sub
+            conn_items.append(f"• #{pid} — {row['name']} x{qty} — {sub:.2f} TL")
+    finally:
+        conn.close()
+    body = "Sepet:\n" + "\n".join(conn_items) + f"\n\nAra toplam: {total:.2f} TL"
+    return body, by_id
+
+
+def _cart_keyboard(ud: dict) -> InlineKeyboardMarkup:
+    """Sepette + / - ile miktar (stok tavani urun listesi ve burada kontrol edilir)."""
+    cart = ud.get("cart") or {}
+    rows = []
+    for k in sorted(cart.keys(), key=int):
+        pid = int(k)
+        qty = int(cart[k])
+        # Uzun urun adi 3 sutunlu satirda kesilir; tam bilgi yukaridaki sepet metninde.
+        rows.append(
+            [
+                InlineKeyboardButton("+", callback_data=f"a:{pid}"),
+                InlineKeyboardButton(f"{qty} ad · #{pid}", callback_data="noop"),
+                InlineKeyboardButton("−", callback_data=f"x:{pid}"),
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton("Siparisi onayla", callback_data="chk"),
+            InlineKeyboardButton("Sepeti bosalt", callback_data="clr"),
+        ]
     )
+    # Tek dugme = tam satir genisligi; uzun Turkce etiketler kesilmesin.
+    rows.append([InlineKeyboardButton("Urun listesine don", callback_data="m:urun_ret")])
+    rows.append([InlineKeyboardButton("Ana menu", callback_data="m:home")])
+    return InlineKeyboardMarkup(rows)
+
+
+async def _send_product_page(update: Update, context, page: int):
+    ud = _ud(context)
+    ud["product_page"] = page
+    prods = list_products(
+        tenant_id=TENANT_ID, limit=500, in_stock_only=True, order_by="id"
+    )
+    if not prods:
+        t = update.callback_query.message if update.callback_query else update.message
+        await t.reply_text("Stokta urun yok.", reply_markup=BACK_KB)
+        return
+    start = page * PRODUCTS_PAGE
+    chunk = prods[start : start + PRODUCTS_PAGE]
+    lines = [
+        "Stoktaki urunler, urun numarasina gore sirali (sayfa basi 5). "
+        "Fiyat TL; + ile sepete ekleyin, miktari Sepetim'den ayarlayin.",
+    ]
+    for p in chunk:
+        sq = int(p.get("stock_quantity") or 0)
+        lines.append(
+            f"• #{p['id']} — {p['name']} — {p['price']:.2f} TL (stok: {sq})"
+        )
+    rows = []
+    for p in chunk:
+        short = p["name"][:26] + ("…" if len(p["name"]) > 26 else "")
+        rows.append(
+            [InlineKeyboardButton(f"+ {short}", callback_data=f"a:{p['id']}")]
+        )
+    nav = []
+    if start > 0:
+        nav.append(InlineKeyboardButton("Onceki", callback_data=f"v:{page-1}"))
+    if start + PRODUCTS_PAGE < len(prods):
+        nav.append(InlineKeyboardButton("Sonraki", callback_data=f"v:{page+1}"))
+    if nav:
+        rows.append(nav)
+    rows.append(
+        [
+            InlineKeyboardButton("Sepetim", callback_data="cart"),
+            InlineKeyboardButton("Ana menu", callback_data="m:home"),
+        ]
+    )
+    kb = InlineKeyboardMarkup(rows)
+    t = update.callback_query.message if update.callback_query else update.message
+    await t.reply_text("\n".join(lines), reply_markup=kb)
+
+
+async def _try_cargo_from_message(update: Update, context, text: str) -> bool:
+    """Kargo takip kodu (orders.cargo_tracking_code) ile eslesen siparisi bul; scope kur."""
+    t = (text or "").strip()
+    if len(t) < 2:
+        return False
+    if _extract_phone_token(t):
+        return False
+    if _extract_sip(t):
+        return False
+    from database.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT * FROM orders
+        WHERE tenant_id = ?
+          AND cargo_tracking_code IS NOT NULL
+          AND TRIM(cargo_tracking_code) = ?
+        LIMIT 1
+        """,
+        (TENANT_ID, t),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return False
+    od = dict(row)
+    ud = _ud(context)
+    sess = _sess(update)
+    ph = (od.get("customer_phone") or "").strip()
+    if ph:
+        ud["telefon"] = ph
+        ud["takip_kodu"] = None
+        set_session_scope(sess, telefon=ph)
+    elif od.get("tracking_code"):
+        ud["takip_kodu"] = od["tracking_code"]
+        ud["telefon"] = None
+        set_session_scope(sess, takip_kodu=od["tracking_code"])
+    else:
+        return False
+    activate_scope(sess)
+    data = musteri_siparisleri.invoke({})
+    await update.message.reply_text(
+        f"Kargo kodu eslesti.\n\n{_fmt_orders(data)}",
+        reply_markup=MENU_KB,
+    )
+    return True
+
+
+async def _try_scope_from_message(update: Update, context, text: str) -> bool:
+    """Telefon veya SIP ile scope kur; basariliysa True."""
+    ud = _ud(context)
+    sess = _sess(update)
+    phone = _extract_phone_token(text)
+    sip = _extract_sip(text)
+    if phone and validate_phone(phone):
+        _set_scope_phone(sess, ud, phone)
+        _sync_scope_from_ud(sess, ud)
+        data = musteri_siparisleri.invoke({})
+        await update.message.reply_text(
+            f"Telefon dogrulandi.\n\n{_fmt_orders(data)}", reply_markup=MENU_KB
+        )
+        return True
+    if sip and validate_tracking_code(sip):
+        _set_scope_sip(sess, ud, sip)
+        _sync_scope_from_ud(sess, ud)
+        data = musteri_siparisleri.invoke({})
+        await update.message.reply_text(
+            f"Takip kodu dogrulandi.\n\n{_fmt_orders(data)}", reply_markup=MENU_KB
+        )
+        return True
+    if phone or sip:
+        await update.message.reply_text(
+            "Kayit bulunamadi. Telefon (05XXXXXXXXX) veya gecerli SIP-XXXXXX kullanin.",
+            reply_markup=BACK_KB,
+        )
+        return True
     return False
 
-async def _fast(update, context, intent: str, params: dict):
-    ir = IntentResult(intent=intent, params=params, confidence=0.9, bypass_llm=True)
-    r  = fast_response(ir)
-    await _reply(update, r or "Sorgu tamamlanamadi.")
-
-async def _llm(update, context, text: str):
-    sess = _sess(update)
-    inbound = adapter.parse_update(update)
-    try:
-        result = agent_graph.invoke(
-            {
-                "messages": [HumanMessage(content=text)],
-                "tenant_id": inbound.tenant_id,
-                "channel": inbound.channel,
-                "channel_user_id": inbound.channel_user_id,
-            },
-            config={"configurable": {"thread_id": sess, "tenant_id": inbound.tenant_id}},
-        )
-        resp = result["messages"][-1].content
-        if len(resp) > 4000:
-            resp = resp[:4000] + "\n_(kisaltildi)_"
-        await _reply(update, resp)
-    except Exception as e:
-        await _reply(update, f"Hata: {str(e)[:200]}")
-
-# ---------------------------------------------------------------------------
-# Handlers
-# ---------------------------------------------------------------------------
 
 async def start_command(update: Update, context):
-    _ud(context)["state"] = S_MENU
-    await update.message.reply_text(
-        "KOBİ Asistan'a hosgeldiniz!", reply_markup=MENU_KB
-    )
+    ud = _ud(context)
+    ud["state"] = S_MENU
+    ud["cart"] = {}
+    ud["pending_name"] = None
+    await update.message.reply_text("KOBİ musteri asistanina hosgeldiniz!", reply_markup=MENU_KB)
+
 
 async def menu_command(update: Update, context):
-    await _menu(update, context)
+    await _menu_message(update, context)
 
-async def button_handler(update: Update, context):
+
+async def unified_callback(update: Update, context):
     query = update.callback_query
     await query.answer()
+    data = query.data or ""
     ud = _ud(context)
 
     ok, msg = _rate_ok(update.effective_user.id)
@@ -180,61 +459,150 @@ async def button_handler(update: Update, context):
         await query.message.reply_text(msg)
         return
 
-    action = query.data
+    if data == "noop":
+        return
 
-    if action == "back_menu":
-        await _menu(update, context)
-
-    elif action == "siparis_durumu":
-        ud["state"]  = S_WAITING_ORDER
-        ud["intent"] = "siparis_sorgula"
-        await _reply(update,
-            "Siparis Durumu Sorgulama\n\n"
-            "Siparis numaranizi veya takip kodunuzu girin:\n"
-            "- Ornek: 5\n"
-            "- Ornek: SIP-MD3R45"
-        )
-
-    elif action == "siparislerim":
-        if not await _ensure_auth(update, context, "musteri_siparisleri"):
-            return
+    if data == "m:home":
         ud["state"] = S_MENU
-        await query.message.reply_text("Siparisleriniz getiriliyor...")
-        await _fast(update, context, "musteri_siparisleri", {})
+        await query.message.reply_text(MENU_TEXT, reply_markup=MENU_KB)
+        return
 
-    elif action == "kargo_takip":
-        ud["state"]  = S_WAITING_ORDER
-        ud["intent"] = "kargo_takip"
-        await _reply(update,
-            "Kargo Takibi\n\n"
-            "Siparis numaranizi veya takip kodunuzu girin:"
-        )
-
-    elif action == "iptal_talebi":
-        if not await _ensure_auth(update, context, "iptal_talebi"):
+    if data == "m:list":
+        if not _has_scope(ud):
+            ud["state"] = S_MENU
+            await query.message.reply_text(
+                "Siparislerinizi gormek icin telefon (05XXXXXXXXX) veya siparis numaranizi "
+                "#XX seklinde yazin (ornek: #12 veya 12).",
+                reply_markup=BACK_KB,
+            )
             return
-        ud["state"]  = S_WAITING_CANCEL
-        ud["intent"] = "iptal_talebi"
-        await _reply(update, "Hangi siparisi iptal etmek istiyorsunuz? (No veya SIP-XXXXXX):")
+        sess = _sess(update)
+        _sync_scope_from_ud(sess, ud)
+        out = musteri_siparisleri.invoke({})
+        await query.message.reply_text(_fmt_orders(out), reply_markup=MENU_KB)
+        return
 
-    elif action == "stok_sorgu":
-        ud["state"]  = S_WAITING_PROD
-        ud["intent"] = "stok_sorgu"
-        await _reply(update, "Aramak istediginiz urunu yazin:\nOrnek: zeytinyagi, domates")
+    if data == "m:detay":
+        if not _has_scope(ud):
+            await query.message.reply_text(
+                "Once telefon veya takip kodu ile kimlik dogrulayin.",
+                reply_markup=BACK_KB,
+            )
+            return
+        ud["state"] = S_WAIT_ORDER_DETAIL
+        await query.message.reply_text(
+            "Kayitli telefon numaranizla eslesen siparis icin siparis numarasini "
+            "#XX olarak yazin (ornek: #12 veya 12; yalnizca numara, baska metin eklemeyin).",
+            reply_markup=BACK_KB,
+        )
+        return
 
-    elif action == "gunluk_ozet":
-        activate_scope(_sess(update))
-        await query.message.reply_text("Gunluk ozet getiriliyor...")
-        await _fast(update, context, "gunluk_ozet", {})
+    if data == "m:urun_new":
+        ud["state"] = S_MENU
+        ud["cart"] = {}
+        ud["product_page"] = 0
+        await _send_product_page(update, context, 0)
+        return
 
-    elif action == "serbest_soru":
-        ud["state"] = S_FREE_CHAT
-        await _reply(update, "Serbest Soru Modu - Sorunuzu yazin. /menu ile ana menuye donebilirsiniz.")
+    if data == "m:urun_ret":
+        ud["state"] = S_MENU
+        await _send_product_page(update, context, ud.get("product_page", 0))
+        return
+
+    if data.startswith("v:"):
+        page = int(data.split(":")[1])
+        await _send_product_page(update, context, page)
+        return
+
+    if data.startswith("a:"):
+        pid = int(data.split(":")[1])
+        cart = ud.setdefault("cart", {})
+        stock = _product_stock(pid)
+        cur = int(cart.get(str(pid), 0))
+        if stock <= 0:
+            await query.message.reply_text(
+                f"Urun #{pid} stokta yok.", reply_markup=BACK_KB
+            )
+            return
+        if cur + 1 > stock:
+            await query.message.reply_text(
+                f"Urun #{pid} icin en fazla {stock} adet ekleyebilirsiniz.",
+                reply_markup=BACK_KB,
+            )
+            return
+        cart[str(pid)] = cur + 1
+        await query.message.reply_text(
+            f"Urun #{pid} sepete eklendi ({cart[str(pid)]}/{stock}).",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Sepetim", callback_data="cart"),
+                        InlineKeyboardButton("Ürün Listesi", callback_data="m:urun_ret"),
+                    ],
+                    [InlineKeyboardButton("Ana menu", callback_data="m:home")],
+                ]
+            ),
+        )
+        return
+
+    if data.startswith("x:"):
+        pid = int(data.split(":")[1])
+        cart = ud.setdefault("cart", {})
+        key = str(pid)
+        if key in cart:
+            cart[key] = int(cart[key]) - 1
+            if cart[key] <= 0:
+                del cart[key]
+        body, _ = _cart_lines(ud)
+        await query.message.reply_text(body, reply_markup=_cart_keyboard(ud))
+        return
+
+    if data == "cart":
+        body, _ = _cart_lines(ud)
+        await query.message.reply_text(body, reply_markup=_cart_keyboard(ud))
+        return
+
+    if data == "clr":
+        ud["cart"] = {}
+        await query.message.reply_text("Sepet bosaltildi.", reply_markup=MENU_KB)
+        return
+
+    if data == "chk":
+        cart = ud.get("cart") or {}
+        if not cart:
+            await query.message.reply_text(
+                "Sepet bos. Once urun ekleyin.", reply_markup=MENU_KB
+            )
+            return
+        chat_uid = str(update.effective_chat.id)
+        if has_open_telegram_order_request(TENANT_ID, chat_uid):
+            await query.message.reply_text(
+                "Zaten onay bekleyen bir siparis talebiniz var. "
+                "Mudahale kaydi cozulene kadar yeni talep gonderemezsiniz.",
+                reply_markup=MENU_KB,
+            )
+            return
+        ud["state"] = S_ORDER_NAME
+        await query.message.reply_text(
+            "Siparis icin adinizi ve soyadinizi yazin:",
+            reply_markup=BACK_KB,
+        )
+        return
+
+    if data == "m:iptal":
+        ud["state"] = S_CANCEL_REF
+        ud["cancel_order_id"] = None
+        ud["cancel_name"] = None
+        await query.message.reply_text(
+            "Iptal etmek istediginiz siparis numarasini veya SIP-XXXXXX kodunu yazin:",
+            reply_markup=BACK_KB,
+        )
+        return
 
 
 async def handle_message(update: Update, context):
-    text = update.message.text.strip()
-    ud   = _ud(context)
+    text = (update.message.text or "").strip()
+    ud = _ud(context)
     sess = _sess(update)
 
     ok, msg = _rate_ok(update.effective_user.id)
@@ -249,209 +617,237 @@ async def handle_message(update: Update, context):
 
     state = ud["state"]
 
-    # --- Auth Bekleniyor ---
-    if state == S_WAITING_PHONE:
-        pm = re.search(r"(05\d{9})", text)
-        cm = re.search(r"(SIP-[A-Z0-9]{6})", text, re.IGNORECASE)
-
-        if pm and validate_phone(pm.group(1)):
-            ud["telefon"] = pm.group(1)
-            set_session_scope(sess, telefon=ud["telefon"])
-            activate_scope(sess)
-            await update.message.reply_text(f"{pm.group(1)} dogrulandi!")
-            pending = ud.get("pending_action")
-            if pending == "musteri_siparisleri":
-                ud["state"] = S_MENU
-                await _fast(update, context, "musteri_siparisleri", {})
-            elif pending == "iptal_talebi":
-                ud["state"] = S_WAITING_CANCEL
-                await update.message.reply_text("Hangi siparisi iptal etmek istersiniz?", reply_markup=BACK_KB)
-            else:
-                await _menu(update, context)
-        elif cm and validate_tracking_code(cm.group(1).upper()):
-            ud["takip_kodu"] = cm.group(1).upper()
-            set_session_scope(sess, takip_kodu=ud["takip_kodu"])
-            activate_scope(sess)
-            await update.message.reply_text(f"{ud['takip_kodu']} dogrulandi!")
-            await _menu(update, context)
-        else:
-            await update.message.reply_text(
-                "Numara bulunamadi. Telefon (05XXXXXXXXX) veya takip kodu (SIP-XXXXXX) girin:",
-                reply_markup=BACK_KB
-            )
-        return
-
-    # --- Siparis/Kargo Bekleniyor ---
-    if state == S_WAITING_ORDER:
-        intent = ud.get("intent", "siparis_sorgula")
-        cm = re.search(r"(SIP-[A-Z0-9]{6})", text, re.IGNORECASE)
-        nm = re.search(r"\b(\d{1,6})\b", text)
-
-        if cm:
-            params = {"takip_kodu": cm.group(1).upper()}
-        elif nm:
-            params = {"siparis_no": int(nm.group(1))}
-        else:
-            await update.message.reply_text("Gecerli bir siparis no veya SIP-XXXXXX kodu girin.", reply_markup=BACK_KB)
+    if state == S_MENU:
+        if await _try_scope_from_message(update, context, text):
+            return
+        if await _try_cargo_from_message(update, context, text):
             return
 
-        await update.message.chat.send_action("typing")
-        if intent == "kargo_takip":
-            activate_scope(sess)
-            await _llm(update, context, f"Siparis {text} kargo durumu nedir?")
-        else:
-            if params.get("takip_kodu"):
-                set_session_scope(sess, takip_kodu=params["takip_kodu"])
-            activate_scope(sess)
-            await _fast(update, context, "siparis_sorgula", params)
-        ud["state"] = S_MENU
-        return
-
-    # --- Urun Bekleniyor ---
-    if state == S_WAITING_PROD:
-        if len(text) < 2:
-            await update.message.reply_text("Urun adi cok kisa.", reply_markup=BACK_KB)
-            return
-        await update.message.chat.send_action("typing")
-        await _fast(update, context, "stok_sorgu", {"urun_adi": text})
-        ud["state"] = S_MENU
-        return
-
-    # --- Iptal Talebi: siparis no al, OTP gonder ---
-    if state == S_WAITING_CANCEL:
-        nm = re.search(r"\b(\d{1,6})\b", text)
-        cm = re.search(r"(SIP-[A-Z0-9]{6})", text, re.IGNORECASE)
-        order_ref = nm.group(1) if nm else (cm.group(1) if cm else None)
-        if not order_ref:
+    if state == S_WAIT_ORDER_DETAIL:
+        if not _has_scope(ud):
             await update.message.reply_text(
-                "Lutfen gecerli bir siparis numarasi girin (ornek: 42 ya da SIP-ABC123):",
+                "Once telefon, SIP veya kargo kodu ile kimlik dogrulayin.",
                 reply_markup=BACK_KB,
             )
             return
-        # Siparis no'yu resolve et
-        from database.db import get_connection as _gc
-        conn = _gc()
-        if nm:
-            order_row = conn.execute(
-                "SELECT id, customer_name FROM orders WHERE id = ?", (int(order_ref),)
-            ).fetchone()
-        else:
-            order_row = conn.execute(
-                "SELECT id, customer_name FROM orders WHERE tracking_code = ?", (order_ref.upper(),)
-            ).fetchone()
-        conn.close()
-        if not order_row:
+        t = (text or "").strip().replace(" ", "")
+        m = re.fullmatch(r"#?(\d{1,8})", t)
+        if not m:
             await update.message.reply_text(
-                f"Siparis #{order_ref} bulunamadi. Tekrar deneyin:",
+                "Siparis numarasini yalnizca #12 veya 12 seklinde yazin.",
                 reply_markup=BACK_KB,
             )
             return
-        order_id = int(order_row["id"])
-        # OTP olustur
-        from agent.otp import create_otp_challenge
-        tg_user_id = str(update.effective_user.id)
-        challenge = create_otp_challenge(
-            order_id=order_id,
-            action="cancellation",
-            channel="telegram",
-            channel_user_id=tg_user_id,
-        )
-        ud["otp_order_id"] = order_id
-        ud["state"] = S_WAITING_OTP
-        # DEBUG/DEMO: OTP'yi kullaniciya da gonder (production'da sadece kayitli numaraya gidecek)
+        params = {"siparis_no": int(m.group(1))}
+        _sync_scope_from_ud(sess, ud)
+        data = siparis_sorgula.invoke(params)
         await update.message.reply_text(
-            f"Siparis #{order_id} ({order_row['customer_name']}) iptal talebi icin dogrulama kodu:\n\n"
-            f"Kod: *{challenge['code']}*\n\n"
-            f"Bu kodu girin (10 dakika gecerli, {challenge.get('max_attempts',5)} deneme hakki):",
-            parse_mode="Markdown",
-            reply_markup=BACK_KB,
+            _fmt_order_detail(data), reply_markup=MENU_KB
+        )
+        ud["state"] = S_MENU
+        return
+
+    if state == S_ORDER_NAME:
+        if len(text) < 2:
+            await update.message.reply_text("Lutfen gecerli bir ad girin.", reply_markup=BACK_KB)
+            return
+        ud["pending_name"] = text
+        ud["state"] = S_ORDER_PHONE
+        await update.message.reply_text(
+            "Cep telefonunuzu yazin (05XXXXXXXXX):", reply_markup=BACK_KB
         )
         return
 
-    # --- OTP Dogrulama ---
-    if state == S_WAITING_OTP:
-        code = text.strip()
-        order_id = ud.get("otp_order_id")
-        if not order_id:
-            await _menu(update, context, "Oturum suresi doldu. Ana menuye yonlendiriliyor.")
+    if state == S_ORDER_PHONE:
+        phone = _normalize_phone(text)
+        if not phone:
+            await update.message.reply_text(
+                "Gecerli telefon: 05XXXXXXXXX", reply_markup=BACK_KB
+            )
             return
-        from agent.otp import verify_otp_challenge
-        result = verify_otp_challenge(order_id=order_id, action="cancellation", code=code)
-        if not result["ok"]:
-            hata = result.get("hata", "Dogrulama basarisiz.")
-            # Deneme hakki doldu mu?
-            if "hakki doldu" in hata.lower():
-                await _menu(update, context, f"{hata} Ana menuye yonlendiriliyor.")
-                ud["otp_order_id"] = None
-            else:
+        name = ud.get("pending_name") or ""
+        cart = ud.get("cart") or {}
+        chat_uid = str(update.effective_chat.id)
+        if has_open_telegram_order_request(TENANT_ID, chat_uid):
+            ud["state"] = S_MENU
+            ud["pending_name"] = None
+            await update.message.reply_text(
+                "Zaten onay bekleyen bir talebiniz var.", reply_markup=MENU_KB
+            )
+            return
+        items = [{"product_id": int(k), "quantity": int(v)} for k, v in cart.items()]
+        for it in items:
+            st = _product_stock(int(it["product_id"]))
+            if int(it["quantity"]) > st:
                 await update.message.reply_text(
-                    f"Yanlis kod. {hata} Tekrar deneyin:", reply_markup=BACK_KB
+                    f"Urun #{it['product_id']} icin stok yetersiz (max {st}). "
+                    "Sepeti guncelleyin.",
+                    reply_markup=MENU_KB,
                 )
-            return
-        # OTP dogrulandi — iptal biletini ac
-        from repositories.tickets import create_ticket as _create_ticket
-        ticket_id = _create_ticket(
+                return
+        llm_payload = {
+            "telegram_chat_id": chat_uid,
+            "tenant_id": TENANT_ID,
+            "items": items,
+            "customer_name": name,
+            "customer_phone": phone,
+            "submitted_at": datetime.now().isoformat(timespec="seconds"),
+            "notes": "Telegram talep",
+        }
+        desc_body = _ticket_desc_lines_for_cart(ud)
+        _ = repo_create_ticket(
             payload={
-                "type": "cancellation_request",
-                "title": f"Musteri Iptal Talebi — Siparis #{order_id}",
+                "type": "telegram_order_request",
+                "title": f"Telegram siparis — {name}",
                 "description": (
-                    f"Telegram kullanicisi siparis #{order_id} icin OTP dogrulamali "
-                    f"iptal talebinde bulundu. (tg_user_id={update.effective_user.id})"
+                    f"Musteri: {name}\nTel: {phone}\n{desc_body}\n"
+                    f"(tg chat_id={chat_uid})"
                 ),
                 "priority": "high",
-                "related_order_id": order_id,
+                "llm_content": json.dumps(llm_payload, ensure_ascii=False),
+                "source_channel_user_id": chat_uid,
+            },
+            tenant_id=TENANT_ID,
+            dedupe_key={
+                "type": "telegram_order_request",
+                "source_channel_user_id": chat_uid,
             },
         )
-        ud["otp_order_id"] = None
+        ud["cart"] = {}
+        ud["pending_name"] = None
         ud["state"] = S_MENU
         await update.message.reply_text(
-            f"Iptal talebiniz alindi. Bilet #{ticket_id} olusturuldu.\n"
-            f"Ekibimiz en kisa surede sizi arayacak.",
+            "Sipariş talebiniz alınmıştır, işletmenin onaylaması beklenmektedir. "
+            "Siparişiniz onaylanınca geri dönüş yapılacaktır.",
             reply_markup=MENU_KB,
         )
         return
 
-    # --- Serbest Soru ---
-    if state == S_FREE_CHAT:
-        classified = classify(text)
-        if classified.bypass_llm:
-            if classified.intent in ("musteri_siparisleri", "iptal_talebi"):
-                if not ud.get("telefon") and not ud.get("takip_kodu"):
-                    await update.message.reply_text("Bu islem icin kimlik dogrulama gerekli. /menu yazin.")
-                    return
-            activate_scope(sess)
-            resp = fast_response(classified)
-            if resp:
-                await update.message.reply_text(resp, reply_markup=BACK_KB)
-                return
-        # Auth extraction
-        pm = re.search(r"(05\d{9})", text)
-        cm = re.search(r"(SIP-[A-Z0-9]{6})", text, re.IGNORECASE)
-        if pm and validate_phone(pm.group(1)):
-            ud["telefon"] = pm.group(1)
-            set_session_scope(sess, telefon=ud["telefon"])
-        elif cm and validate_tracking_code(cm.group(1).upper()):
-            ud["takip_kodu"] = cm.group(1).upper()
-            set_session_scope(sess, takip_kodu=ud["takip_kodu"])
-        activate_scope(sess)
-        await update.message.chat.send_action("typing")
-        await _llm(update, context, text)
+    if state == S_CANCEL_REF:
+        cm = _extract_sip(text)
+        nm = re.search(r"\b(\d{1,8})\b", text)
+        from database.db import get_connection
+
+        conn = get_connection()
+        if nm and not cm:
+            row = conn.execute(
+                """
+                SELECT id, customer_name, customer_phone, status
+                FROM orders WHERE id = ? AND tenant_id = ?
+                """,
+                (int(nm.group(1)), TENANT_ID),
+            ).fetchone()
+        elif cm:
+            row = conn.execute(
+                """
+                SELECT id, customer_name, customer_phone, status
+                FROM orders WHERE tracking_code = ? AND tenant_id = ?
+                """,
+                (cm, TENANT_ID),
+            ).fetchone()
+        else:
+            row = None
+        conn.close()
+        if not row:
+            await update.message.reply_text(
+                "Siparis bulunamadi. Tekrar deneyin.", reply_markup=BACK_KB
+            )
+            return
+        status = row["status"] or ""
+        if status in ("iptal", "teslim_edildi", "tamamlandi", "tamamlandı"):
+            await update.message.reply_text(
+                f"Bu siparis ({status}) iptal talebi icin uygun degil.",
+                reply_markup=BACK_KB,
+            )
+            return
+        ud["cancel_order_id"] = int(row["id"])
+        ud["state"] = S_CANCEL_NAME
+        await update.message.reply_text(
+            "Guvenlik: sipariste kayitli ad soyad bilgisini aynen yazin:",
+            reply_markup=BACK_KB,
+        )
         return
 
-    # --- Varsayilan: Classifier dene, yoksa menu goster ---
-    classified = classify(text)
-    if classified.bypass_llm:
-        activate_scope(sess)
-        resp = fast_response(classified)
-        if resp:
-            await update.message.reply_text(resp, reply_markup=BACK_KB)
+    if state == S_CANCEL_NAME:
+        ud["cancel_name"] = text
+        ud["state"] = S_CANCEL_PHONE
+        await update.message.reply_text(
+            "Kayitli telefon numarasini yazin (05XXXXXXXXX):", reply_markup=BACK_KB
+        )
+        return
+
+    if state == S_CANCEL_PHONE:
+        phone = _normalize_phone(text)
+        if not phone:
+            await update.message.reply_text(
+                "Gecerli telefon: 05XXXXXXXXX", reply_markup=BACK_KB
+            )
             return
-    await _menu(update, context, text="Bir secenek secin veya sorunuzu yazin:")
+        oid = ud.get("cancel_order_id")
+        from database.db import get_connection
 
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT customer_name, customer_phone FROM orders WHERE id = ? AND tenant_id = ?",
+            (oid, TENANT_ID),
+        ).fetchone()
+        conn.close()
+        if not row:
+            await _menu_message(update, context, "Siparis bulunamadi.")
+            return
+        if not _phone_match(row["customer_phone"], phone):
+            ud["state"] = S_MENU
+            await update.message.reply_text(
+                "Telefon bilgisi eslesmedi. Iptal talebi olusturulmadi.",
+                reply_markup=MENU_KB,
+            )
+            return
+        if normalize_name(ud.get("cancel_name") or "") != normalize_name(
+            row["customer_name"] or ""
+        ):
+            ud["state"] = S_MENU
+            await update.message.reply_text(
+                "Isim bilgisi eslesmedi. Iptal talebi olusturulmadi.",
+                reply_markup=MENU_KB,
+            )
+            return
+        chat_uid = str(update.effective_chat.id)
+        _ = repo_create_ticket(
+            payload={
+                "type": "cancellation_request",
+                "title": f"Telegram iptal talebi — Siparis #{oid}",
+                "description": (
+                    f"Musteri Telegram uzerinden iptal talebinde bulundu. "
+                    f"Siparis #{oid}. (tg chat_id={chat_uid})"
+                ),
+                "priority": "high",
+                "related_order_id": oid,
+                "source_channel_user_id": chat_uid,
+            },
+            tenant_id=TENANT_ID,
+            dedupe_key={"type": "cancellation_request", "related_order_id": oid},
+        )
+        ud["state"] = S_MENU
+        ud["cancel_order_id"] = None
+        ud["cancel_name"] = None
+        await update.message.reply_text(
+            "İptal talebiniz alınmıştır, işletmenin onaylaması beklenmektedir. "
+            "İptal işleminiz sonuçlandığında size bu sohbetten geri dönüş sağlanacaktır.",
+            reply_markup=MENU_KB,
+        )
+        return
 
-# ---------------------------------------------------------------------------
-# Setup / Teardown
-# ---------------------------------------------------------------------------
+    if state == S_MENU:
+        await update.message.reply_text(
+            "İsterseniz aşağıdaki menü seçeneklerini kullanın ya da telefon numaranızı, "
+            "SIP takip kodunuzu (SIP-XXXXXX) veya kargo takip kodunuzu gönderin.",
+            reply_markup=MENU_KB,
+        )
+        return
+
+    ud["state"] = S_MENU
+    await update.message.reply_text("Ana menuye donuldu.", reply_markup=MENU_KB)
+
 
 async def setup_telegram():
     global telegram_app
@@ -461,14 +857,14 @@ async def setup_telegram():
 
     telegram_app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
     telegram_app.add_handler(CommandHandler("start", start_command))
-    telegram_app.add_handler(CommandHandler("menu",  menu_command))
-    telegram_app.add_handler(CallbackQueryHandler(button_handler))
+    telegram_app.add_handler(CommandHandler("menu", menu_command))
+    telegram_app.add_handler(CallbackQueryHandler(unified_callback))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     await telegram_app.initialize()
     await telegram_app.start()
     await telegram_app.updater.start_polling(drop_pending_updates=True)
-    print("[OK] Telegram bot baslatildi (interaktif menu aktif)!")
+    print("[OK] Telegram musteri botu baslatildi.")
 
 
 async def stop_telegram():

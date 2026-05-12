@@ -52,6 +52,8 @@ def list_products(
     critical_only: bool = False,
     search: str | None = None,
     limit: int = 100,
+    in_stock_only: bool = False,
+    order_by: str = "name",
 ) -> list[dict]:
     conn = get_connection()
     q = "SELECT * FROM products WHERE is_active = 1 AND tenant_id = ?"
@@ -61,10 +63,13 @@ def list_products(
         params.append(category)
     if critical_only:
         q += " AND stock_quantity <= low_stock_threshold"
+    if in_stock_only:
+        q += " AND stock_quantity > 0"
     if search and str(search).strip():
         q += " AND name LIKE ?"
         params.append(f"%{str(search).strip()}%")
-    q += " ORDER BY name ASC LIMIT ?"
+    ob = "id ASC" if order_by == "id" else "name ASC"
+    q += f" ORDER BY {ob} LIMIT ?"
     params.append(limit)
     rows = conn.execute(q, params).fetchall()
     conn.close()

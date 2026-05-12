@@ -29,6 +29,25 @@ def list_tickets(
     return [dict(r) for r in rows]
 
 
+def has_open_telegram_order_request(tenant_id: int, source_channel_user_id: str) -> bool:
+    """Ayni Telegram kullanicisinda cozulmemis siparis talebi var mi."""
+    if not source_channel_user_id:
+        return False
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT 1 FROM tickets
+        WHERE tenant_id = ? AND type = 'telegram_order_request'
+          AND status != 'resolved'
+          AND source_channel_user_id = ?
+        LIMIT 1
+        """,
+        (tenant_id, str(source_channel_user_id)),
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
 def get_ticket(ticket_id: int, tenant_id: int = 1) -> dict | None:
     conn = get_connection()
     row = conn.execute(
@@ -73,9 +92,9 @@ def create_ticket(payload: dict, tenant_id: int = 1, dedupe_key: dict | None = N
         """
         INSERT INTO tickets (
             tenant_id, type, title, description, priority, llm_content,
-            related_order_id, related_product_id
+            related_order_id, related_product_id, source_channel_user_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             tenant_id,
@@ -86,6 +105,7 @@ def create_ticket(payload: dict, tenant_id: int = 1, dedupe_key: dict | None = N
             payload.get("llm_content"),
             payload.get("related_order_id"),
             payload.get("related_product_id"),
+            payload.get("source_channel_user_id"),
         ),
     )
     ticket_id = int(cursor.lastrowid)

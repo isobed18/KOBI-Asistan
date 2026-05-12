@@ -22,6 +22,7 @@ export const TICKET_TYPE = {
   'cargo_delay':          { label: 'Kargo Gecikmesi',  cls: 'badge-yellow' },
   'stock_alert':          { label: 'Stok Uyarısı',     cls: 'badge-purple' },
   'cancellation_request': { label: 'İptal Talebi',      cls: 'badge-red'    },
+  'telegram_order_request': { label: 'Telegram Sipariş', cls: 'badge-blue'  },
   'complaint':            { label: 'Şikayet',           cls: 'badge-yellow' },
   'refund_request':       { label: 'İade Talebi',       cls: 'badge-blue'   },
   'anomaly':              { label: 'Anomali',            cls: 'badge-purple' },

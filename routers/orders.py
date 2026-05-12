@@ -12,8 +12,8 @@ from database.db import get_connection
 from database.schemas import OrderCreate, OrderPatch, OrderStatusUpdate
 from repositories.orders import (
     UNSET,
+    create_order_from_items,
     delete_order_and_restore_stock,
-    deduct_stock_on_order_created,
     fetch_orders_page_enriched,
     get_order_enriched,
     patch_order,
@@ -163,69 +163,20 @@ def delete_order_route(order_id: int):
 
 @router.post("/", summary="Yeni siparis olustur", status_code=201)
 def create_order(body: OrderCreate):
-    conn = get_connection()
-    try:
-        conn.execute("BEGIN")
-        cursor = conn.cursor()
-        total = 0.0
-        item_rows: list[tuple[int, int, float]] = []
-        for item in body.items:
-            product = cursor.execute(
-                """
-                SELECT id, price, stock_quantity
-                FROM products
-                WHERE id = ? AND is_active = 1 AND tenant_id = ?
-                """,
-                (item["product_id"], TENANT_ID),
-            ).fetchone()
-            if not product:
-                conn.rollback()
-                raise HTTPException(
-                    status_code=404, detail=f"Urun #{item['product_id']} bulunamadi."
-                )
-            if product["stock_quantity"] < item["quantity"]:
-                conn.rollback()
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"Urun #{item['product_id']} icin yeterli stok yok. "
-                        f"Mevcut: {product['stock_quantity']}"
-                    ),
-                )
-            subtotal = product["price"] * item["quantity"]
-            total += subtotal
-            item_rows.append((item["product_id"], item["quantity"], product["price"]))
-
-        cursor.execute(
-            """
-            INSERT INTO orders (tenant_id, customer_name, customer_phone, notes, total_price)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (TENANT_ID, body.customer_name, body.customer_phone, body.notes, total),
-        )
-        order_id = cursor.lastrowid
-
-        for product_id, quantity, unit_price in item_rows:
-            cursor.execute(
-                """
-                INSERT INTO order_items (order_id, product_id, quantity, unit_price)
-                VALUES (?, ?, ?, ?)
-                """,
-                (order_id, product_id, quantity, unit_price),
-            )
-
-        deduct_stock_on_order_created(conn, order_id, TENANT_ID)
-        conn.commit()
-    except HTTPException:
-        conn.rollback()
-        raise
-    except ValueError as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-    return {"message": "Siparis olusturuldu.", "order_id": order_id, "total_price": total}
+    result = create_order_from_items(
+        customer_name=body.customer_name,
+        customer_phone=body.customer_phone,
+        notes=body.notes,
+        items=list(body.items),
+        tenant_id=TENANT_ID,
+    )
+    if result.get("hata"):
+        msg = result["hata"]
+        code = 404 if "bulunamadi" in msg.lower() else 400
+        raise HTTPException(status_code=code, detail=msg)
+    return {
+        "message": "Siparis olusturuldu.",
+        "order_id": result["order_id"],
+        "total_price": result["total_price"],
+        "tracking_code": result["tracking_code"],
+    }

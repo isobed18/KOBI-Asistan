@@ -66,8 +66,14 @@ export const getTickets = (params = {}) => {
   return req(`/tickets/${q ? '?' + q : ''}`)
 }
 export const getTicket = (id) => req(`/tickets/${id}`)
-export const updateTicketStatus = (id, status) =>
-  req(`/tickets/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) })
+export const updateTicketStatus = (id, status, resolution = undefined) =>
+  req(`/tickets/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      status,
+      ...(resolution != null && resolution !== '' ? { resolution } : {}),
+    }),
+  })
 export const createTicketManual = (body) =>
   req('/tickets/', { method: 'POST', body: JSON.stringify(body) })
 export const getTicketStats = () => req('/tickets/stats/summary')

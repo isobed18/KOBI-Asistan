@@ -304,6 +304,117 @@ def _apply_stock_delta(
     )
 
 
+def _unique_tracking_code(conn) -> str:
+    """SIP-XXXXXX benzersiz takip kodu üretir."""
+    from agent.auth import generate_tracking_code
+
+    for _ in range(40):
+        code = generate_tracking_code()
+        row = conn.execute(
+            "SELECT 1 FROM orders WHERE tracking_code = ?", (code,)
+        ).fetchone()
+        if not row:
+            return code
+    raise RuntimeError("Benzersiz takip kodu uretilemedi")
+
+
+def create_order_from_items(
+    *,
+    customer_name: str,
+    customer_phone: str | None,
+    notes: str | None,
+    items: list[dict],
+    tenant_id: int = 1,
+) -> dict:
+    """
+    Yeni sipariş oluşturur; benzersiz tracking_code atar, stok düşer.
+    items: [{"product_id": int, "quantity": int}, ...]
+    Dönüş: {"basari": True, "order_id", "total_price", "tracking_code"} veya {"hata": str}.
+    """
+    if not items:
+        return {"hata": "Sepet bos, en az bir urun gerekli."}
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN")
+        cursor = conn.cursor()
+        total = 0.0
+        item_rows: list[tuple[int, int, float]] = []
+        for item in items:
+            pid = int(item["product_id"])
+            qty = int(item["quantity"])
+            if qty < 1:
+                conn.rollback()
+                return {"hata": f"Urun #{pid} icin adet en az 1 olmalidir."}
+
+            product = cursor.execute(
+                """
+                SELECT id, price, stock_quantity
+                FROM products
+                WHERE id = ? AND is_active = 1 AND tenant_id = ?
+                """,
+                (pid, tenant_id),
+            ).fetchone()
+            if not product:
+                conn.rollback()
+                return {"hata": f"Urun #{pid} bulunamadi."}
+            if product["stock_quantity"] < qty:
+                conn.rollback()
+                return {
+                    "hata": (
+                        f"Urun #{pid} icin yeterli stok yok. "
+                        f"Mevcut: {product['stock_quantity']}"
+                    )
+                }
+            subtotal = product["price"] * qty
+            total += subtotal
+            item_rows.append((pid, qty, product["price"]))
+
+        tracking_code = _unique_tracking_code(cursor)
+
+        cursor.execute(
+            """
+            INSERT INTO orders (
+                tenant_id, tracking_code, customer_name, customer_phone, notes, total_price
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tenant_id,
+                tracking_code,
+                customer_name,
+                customer_phone,
+                notes,
+                total,
+            ),
+        )
+        order_id = int(cursor.lastrowid)
+
+        for product_id, quantity, unit_price in item_rows:
+            cursor.execute(
+                """
+                INSERT INTO order_items (order_id, product_id, quantity, unit_price)
+                VALUES (?, ?, ?, ?)
+                """,
+                (order_id, product_id, quantity, unit_price),
+            )
+
+        deduct_stock_on_order_created(conn, order_id, tenant_id)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return {
+        "basari": True,
+        "order_id": order_id,
+        "total_price": total,
+        "tracking_code": tracking_code,
+    }
+
+
 def deduct_stock_on_order_created(conn, order_id: int, tenant_id: int) -> None:
     """Sipariş satırlarına göre stok düşer; hareket nedeni olusturma (durum güncellemesinde çift düşümü engeller)."""
     items = conn.execute(

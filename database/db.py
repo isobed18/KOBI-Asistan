@@ -218,6 +218,9 @@ def init_db():
     # Kargo paneli: manuel "Bildir" ile isaretlenen gecikmeler (kalici)
     ensure_column("orders", "cargo_delay_bildirildi_at", "TEXT")
 
+    # Telegram siparis talebi: acik talep dedupe ve sorgu
+    ensure_column("tickets", "source_channel_user_id", "TEXT")
+
     def ensure_index(name: str, ddl: str):
         cursor.execute(ddl)
 

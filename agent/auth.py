@@ -62,6 +62,17 @@ def get_active_scope() -> dict:
 
 # ── Yetki Kontrol Fonksiyonlari ──
 
+def _digits_phone(s: str | None) -> str:
+    return "".join(c for c in (s or "") if c.isdigit())
+
+
+def _phone_scope_matches_order(scope_phone: str, order_phone: str | None) -> bool:
+    """DB ve kullanici girisi farkli formatlarda olabilir; sadece rakamlarla kiyasla."""
+    a = _digits_phone(scope_phone)
+    b = _digits_phone(order_phone)
+    return bool(a) and a == b
+
+
 def check_order_access(order_row: dict) -> tuple:
     """
     Siparis satirina erisim izni kontrol eder.
@@ -75,8 +86,8 @@ def check_order_access(order_row: dict) -> tuple:
 
     # Telefon ile scope
     if scope.get("telefon"):
-        if order_row.get("customer_phone") != scope["telefon"]:
-            return False, "Bu siparise erisim yetkiniz yok. Sadece kendi siparislerinizi sorgulayabilirsiniz."
+        if not _phone_scope_matches_order(scope["telefon"], order_row.get("customer_phone")):
+            return False, "Bu siparis telefon numaraniz ile eslesmiyor."
 
     # Takip kodu ile scope
     if scope.get("takip_kodu"):

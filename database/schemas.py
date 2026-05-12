@@ -115,7 +115,7 @@ class DailySummary(BaseModel):
 #  BİLET
 
 class TicketCreate(BaseModel):
-    type: str                       # cargo_delay | stock_alert | cancellation_request | anomaly
+    type: str                       # cargo_delay | stock_alert | cancellation_request | telegram_order_request | ...
     title: str
     description: Optional[str] = None
     priority: str = "normal"        # low | normal | high | critical
@@ -125,6 +125,7 @@ class TicketCreate(BaseModel):
 
 class TicketStatusUpdate(BaseModel):
     status: str                     # open | in_progress | resolved
+    resolution: Optional[str] = None  # approve|reject (telegram_order_request); approve_cancel (cancellation_request)
 
 class TicketResponse(BaseModel):
     id: int

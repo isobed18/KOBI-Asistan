@@ -22,6 +22,55 @@ function fmtDate(s) {
   return s ? new Date(s).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 }
 
+function TelegramOrderPayload({ raw }) {
+  let data = null
+  try {
+    data = JSON.parse(raw || '{}')
+  } catch {
+    return null
+  }
+  const items = data.items
+  if (!Array.isArray(items) || !items.length) return null
+  return (
+    <div
+      className="ticket-desc"
+      style={{
+        marginTop: 4,
+        background: 'var(--surface)',
+        padding: '10px 12px',
+        borderRadius: 8,
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 8 }}>Telegram sepet</div>
+      <ul style={{ margin: 0, paddingLeft: 18 }}>
+        {items.map((it, i) => (
+          <li key={i}>
+            Ürün #{it.product_id} — {it.quantity} adet
+          </li>
+        ))}
+      </ul>
+      {(data.customer_name || data.customer_phone) && (
+        <div style={{ marginTop: 10, fontSize: 14 }}>
+          <strong>Müşteri:</strong> {data.customer_name || '—'} / {data.customer_phone || '—'}
+        </div>
+      )}
+      {data.telegram_chat_id && (
+        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+          Chat ID: {data.telegram_chat_id}
+        </div>
+      )}
+      {data.fulfilled_order_id != null && (
+        <div style={{ marginTop: 8, color: 'var(--success)' }}>
+          Oluşturulan sipariş: #{data.fulfilled_order_id}
+        </div>
+      )}
+      {data.panel_resolution === 'reject' && (
+        <div style={{ marginTop: 8 }}>Sonuç: reddedildi</div>
+      )}
+    </div>
+  )
+}
+
 function LLMContent({ raw, type }) {
   const [expanded, setExpanded] = useState(false)
   if (!raw) return null
@@ -124,11 +173,12 @@ function readTicketTabFromSearchParams(sp) {
 
 function TicketCard({ ticket, onUpdated }) {
   const [loading, setLoading] = useState(false)
+  const isTelegramOrder = ticket.type === 'telegram_order_request'
 
-  const changeStatus = async (newStatus) => {
+  const changeStatus = async (newStatus, resolution = undefined) => {
     setLoading(true)
     try {
-      await updateTicketStatus(ticket.id, newStatus)
+      await updateTicketStatus(ticket.id, newStatus, resolution)
       onUpdated()
     } catch (e) {
       alert(e.message)
@@ -187,7 +237,29 @@ function TicketCard({ ticket, onUpdated }) {
 
       {ticket.description && <div className="ticket-desc">{ticket.description}</div>}
 
-      <LLMContent raw={ticket.llm_content} type={ticket.type} />
+      {ticket.type === 'cancellation_request' && ticket.status !== 'resolved' && (
+        <p className="ticket-desc" style={{ fontSize: 13, opacity: 0.9 }}>
+          <strong>İptali onayla</strong>: sipariş silinir, stok iade edilir ve Telegram’dan müşteriye bilgi gider
+          (yalnızca <em>hazırlanıyor</em> / <em>kargoda</em>).
+        </p>
+      )}
+      {ticket.type === 'cancellation_request' && ticket.source_channel_user_id && (
+        <div className="ticket-desc" style={{ fontSize: 12, opacity: 0.85 }}>
+          Telegram chat: {ticket.source_channel_user_id}
+        </div>
+      )}
+
+      {isTelegramOrder && ticket.status !== 'resolved' && (
+        <p className="ticket-desc" style={{ fontSize: 13, opacity: 0.9 }}>
+          <strong>Onayla</strong>: sipariş oluşturulur ve stok düşer. <strong>Reddet</strong>: müşteriye Telegram ile bilgi gider.
+        </p>
+      )}
+
+      {isTelegramOrder ? (
+        <TelegramOrderPayload raw={ticket.llm_content} />
+      ) : (
+        <LLMContent raw={ticket.llm_content} type={ticket.type} />
+      )}
 
       <div className="ticket-actions">
         {ticket.status === 'open' && (
@@ -198,7 +270,43 @@ function TicketCard({ ticket, onUpdated }) {
             İşleme Al
           </button>
         )}
-        {ticket.status !== 'resolved' && (
+        {ticket.status !== 'resolved' && isTelegramOrder && (
+          <>
+            <button
+              type="button"
+              className="btn btn-success btn-sm"
+              onClick={() => changeStatus('resolved', 'approve')}
+              disabled={loading}
+            >
+              <span className="ticket-btn-icon" aria-hidden>
+                <IconBtnCheck />
+              </span>
+              Siparişi onayla
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => changeStatus('resolved', 'reject')}
+              disabled={loading}
+            >
+              Reddet
+            </button>
+          </>
+        )}
+        {ticket.status !== 'resolved' && ticket.type === 'cancellation_request' && (
+          <button
+            type="button"
+            className="btn btn-success btn-sm"
+            onClick={() => changeStatus('resolved', 'approve_cancel')}
+            disabled={loading}
+          >
+            <span className="ticket-btn-icon" aria-hidden>
+              <IconBtnCheck />
+            </span>
+            İptali onayla
+          </button>
+        )}
+        {ticket.status !== 'resolved' && !isTelegramOrder && ticket.type !== 'cancellation_request' && (
           <button type="button" className="btn btn-success btn-sm" onClick={() => changeStatus('resolved')} disabled={loading}>
             <span className="ticket-btn-icon" aria-hidden>
               <IconBtnCheck />
@@ -222,6 +330,7 @@ function TicketCard({ ticket, onUpdated }) {
 const TYPE_FILTER_OPTIONS = [
   { value: 'cargo_delay', label: TICKET_TYPE.cargo_delay.label },
   { value: 'stock_alert', label: TICKET_TYPE.stock_alert.label },
+  { value: 'telegram_order_request', label: TICKET_TYPE.telegram_order_request.label },
   { value: 'cancellation_request', label: TICKET_TYPE.cancellation_request.label },
   { value: 'complaint', label: TICKET_TYPE.complaint.label },
   { value: 'refund_request', label: TICKET_TYPE.refund_request.label },
