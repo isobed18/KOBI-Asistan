@@ -90,40 +90,51 @@ def _extract_json(text: str) -> dict:
 # Günlük Rapor
 # ---------------------------------------------------------------------------
 
-def generate_daily_report(raw_data: dict) -> str:
-    """Ham özet veriden kapsamlı Türkçe yönetici raporu üretir."""
-    llm = _create_llm(temperature=0.4)
+_DAILY_REPORT_INSTRUCTIONS = """
+Raporun yapısı (başlıklarda ve gövdede emoji veya dekoratif sembol kullanma; yalnızca düz metin başlıklar):
+## Genel durum özeti
+Rapor tarihini (verideki rapor_tarihi) tek cümlede bağlam olarak an; ardından 2-3 cümlede operasyonel sağlık ve öne çıkan riskleri özetle.
 
-    prompt = f"""Sen deneyimli bir işletme analisti yapay zeka asistanısın.
+## Sipariş durumu
+Durumlara göre dağılım ve dikkat edilmesi gereken sapmalar. Önemli sayıları **kalın** yaz.
+
+## Stok uyarıları
+Kritik ürünler ve önerilen aksiyonlar. Veri yoksa: "Kritik stok uyarısı bulunmuyor; seviyeler kabul edilebilir."
+
+## Kargo durumu
+Gecikme veya şube bekleme gibi sorunlar. Sorun yoksa kısa teyit cümlesi.
+
+## Bekleyen biletler ve çözülmesi gerekenler
+Açık biletleri öncelik sırasıyla; yoksa "Açık bilet bulunmuyor."
+
+## Bugün yapılması gerekenler
+Öncelik sırasına göre madde işaretli liste; somut ve uygulanabilir maddeler.
+
+## Öneri
+Tek bir kısa stratejik öneri (yönetici özeti tonunda).
+
+Genel kurallar:
+- Dil: Türkçe, profesyonel yönetici / operasyon özeti; nesnel ve ölçülü; samimi veya sohbet dili kullanma.
+- Markdown: ## başlıklar, gerektiğinde ### alt başlıklar, listeler, gerektiğinde **vurgu**; tablo yalnızca karşılaştırma anlamlıysa.
+- Ham JSON veya veri dökümünü rapora yapıştırma; veriyi yorumlayarak özetle.
+"""
+
+
+def _daily_report_prompt(raw_data: dict) -> str:
+    return f"""Sen deneyimli bir iş analisti asistanısın.
 Küçük ve orta ölçekli bir e-ticaret işletmesi için aşağıdaki günlük operasyonel veriyi analiz et
-ve işletme sahibine yönelik kapsamlı, aksiyon odaklı bir sabah raporu hazırla.
+ve üst yönetime sunulabilecek, aksiyon odaklı bir günlük özet raporu üret.
 
 Veri:
 {json.dumps(raw_data, ensure_ascii=False, indent=2)}
+{_DAILY_REPORT_INSTRUCTIONS}
+"""
 
-Raporun yapısı:
-## 📊 Genel Durum Özeti
-(2-3 cümle, genel sağlık durumu)
 
-## 📦 Sipariş Durumu
-(durumlara göre dağılım, dikkat edilmesi gerekenler)
-
-## ⚠️ Stok Uyarıları
-(kritik ürünler ve önerilen aksiyonlar — yoksa "Tüm ürünler yeterli stok seviyesinde.")
-
-## 🚚 Kargo Durumu
-(gecikme veya sorunlar — yoksa "Kargo süreçleri sorunsuz devam ediyor.")
-
-## 🎫 Bekleyen Biletler & Çözülmesi Gerekenler
-(açık biletleri öncelik sırasıyla listele; yoksa "İnceleme bekleyen bilet bulunmuyor.")
-
-## ✅ Bugün Yapılması Gerekenler
-(öncelik sırasına göre madde madde, bilet aksiyon maddelerini de dahil et)
-
-## 💡 Öneri
-(1 adet kısa stratejik öneri)
-
-Raporu Türkçe ve samimi bir yönetici diliyle yaz. Markdown kullan."""
+def generate_daily_report(raw_data: dict) -> str:
+    """Ham özet veriden kapsamlı Türkçe yönetici raporu üretir."""
+    llm = _create_llm(temperature=0.35)
+    prompt = _daily_report_prompt(raw_data)
 
     try:
         response = llm.invoke([HumanMessage(content=prompt)])
@@ -135,25 +146,8 @@ Raporu Türkçe ve samimi bir yönetici diliyle yaz. Markdown kullan."""
 
 async def agenerate_daily_report(raw_data: dict) -> str:
     """Async versiyon — APScheduler için."""
-    llm = _create_llm(temperature=0.4)
-
-    prompt = f"""Sen deneyimli bir işletme analisti yapay zeka asistanısın.
-Küçük ve orta ölçekli bir e-ticaret işletmesi için aşağıdaki günlük operasyonel veriyi analiz et
-ve işletme sahibine yönelik kapsamlı, aksiyon odaklı bir sabah raporu hazırla.
-
-Veri:
-{json.dumps(raw_data, ensure_ascii=False, indent=2)}
-
-Raporun yapısı:
-## 📊 Genel Durum Özeti
-## 📦 Sipariş Durumu
-## ⚠️ Stok Uyarıları
-## 🚚 Kargo Durumu
-## 🎫 Bekleyen Biletler & Çözülmesi Gerekenler
-## ✅ Bugün Yapılması Gerekenler
-## 💡 Öneri
-
-Raporu Türkçe ve samimi bir yönetici diliyle yaz. Markdown kullan."""
+    llm = _create_llm(temperature=0.35)
+    prompt = _daily_report_prompt(raw_data)
 
     try:
         response = await llm.ainvoke([HumanMessage(content=prompt)])

@@ -45,6 +45,12 @@ def _collect_raw_data(tenant_id: int) -> dict:
         WHERE o.status = 'kargoda' AND o.tenant_id = ?
           AND ct.current_status IN ('Şubede Bekliyor', 'Gecikti')
     """, (tenant_id,)).fetchall()
+    open_tickets = cursor.execute("""
+        SELECT id, type, priority, title, created_at
+        FROM tickets
+        WHERE status != 'resolved' AND tenant_id = ?
+        ORDER BY priority DESC, created_at ASC
+    """, (tenant_id,)).fetchall()
     conn.close()
 
     return {
@@ -52,6 +58,7 @@ def _collect_raw_data(tenant_id: int) -> dict:
         "ozet": ozet,
         "kritik_stok": kritik,
         "kargo_gecikmeleri": [dict(r) for r in cargo_delays],
+        "acik_biletler": [dict(r) for r in open_tickets],
         "rapor_tarihi": date.today().isoformat(),
     }
 

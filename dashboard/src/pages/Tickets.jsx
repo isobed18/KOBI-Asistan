@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { getTickets, updateTicketStatus } from '../api.js'
+import { getTickets, getTicketStats, updateTicketStatus } from '../api.js'
 import StatusBadge, { TICKET_STATUS, TICKET_TYPE, TICKET_PRIORITY } from '../components/StatusBadge.jsx'
 
 function fmtDate(s) {
@@ -167,12 +167,18 @@ export default function Tickets() {
   )
 
   const [tickets, setTickets]   = useState([])
+  const [ticketStats, setTicketStats] = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
   const [typeFilter, setTypeFilter] = useState('')
 
+  const refreshStats = () => {
+    getTicketStats().then(setTicketStats).catch(() => setTicketStats(null))
+  }
+
   const load = () => {
     setLoading(true)
+    refreshStats()
     const params = {}
     if (tab !== 'all') params.status = tab
     if (typeFilter)    params.type   = typeFilter
@@ -184,69 +190,101 @@ export default function Tickets() {
 
   useEffect(() => { load() }, [tab, typeFilter])
 
-  const openCount       = tickets.filter(t => t.status === 'open').length
-  const inProgressCount = tickets.filter(t => t.status === 'in_progress').length
+  const byStatus = ticketStats?.by_status || {}
+  const countOpen = Number(byStatus.open) || 0
+  const countInProgress = Number(byStatus.in_progress) || 0
+  const countResolved = Number(byStatus.resolved) || 0
+  const countAll = ticketStats
+    ? Object.values(byStatus).reduce((a, n) => a + (Number(n) || 0), 0)
+    : 0
 
   return (
     <>
-      <div className="form-row">
-        <div className="form-group">
-          <label>Tip Filtresi</label>
-          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option value="">Tüm Tipler</option>
-            <option value="cargo_delay">🚚 Kargo Gecikmesi</option>
-            <option value="stock_alert">📦 Stok Uyarısı</option>
-            <option value="cancellation_request">❌ İptal Talebi</option>
-            <option value="complaint">⚠️ Şikayet</option>
-            <option value="refund_request">💰 İade Talebi</option>
-            <option value="anomaly">🔍 Anomali</option>
-            <option value="other">Diğer</option>
-          </select>
+      <div className="card">
+        <div className="form-row" style={{ alignItems: 'flex-end', marginBottom: 0, gap: 12 }}>
+          <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+            <label>Tip Filtresi</label>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+              <option value="">Tüm Tipler</option>
+              <option value="cargo_delay">🚚 Kargo Gecikmesi</option>
+              <option value="stock_alert">📦 Stok Uyarısı</option>
+              <option value="cancellation_request">❌ İptal Talebi</option>
+              <option value="complaint">⚠️ Şikayet</option>
+              <option value="refund_request">💰 İade Talebi</option>
+              <option value="anomaly">🔍 Anomali</option>
+              <option value="other">Diğer</option>
+            </select>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={load}>🔄 Yenile</button>
         </div>
-        <button className="btn btn-ghost" style={{ alignSelf: 'flex-end' }} onClick={load}>🔄 Yenile</button>
       </div>
 
-      <div className="tab-bar">
-        <button className={`tab-btn${tab === 'open' ? ' active' : ''}`} onClick={() => setTab('open')}>
-          🔴 Açık
-        </button>
-        <button className={`tab-btn${tab === 'in_progress' ? ' active' : ''}`} onClick={() => setTab('in_progress')}>
-          🟡 İşlemde
-        </button>
-        <button className={`tab-btn${tab === 'resolved' ? ' active' : ''}`} onClick={() => setTab('resolved')}>
-          🟢 Çözüldü
-        </button>
-        <button className={`tab-btn${tab === 'all' ? ' active' : ''}`} onClick={() => setTab('all')}>
-          Tümü
-        </button>
+      <div className="card">
+        <div className="tab-bar" role="tablist" aria-label="Bilet durumu">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'open'}
+            className={`tab-btn${tab === 'open' ? ' active' : ''}`}
+            onClick={() => setTab('open')}
+          >
+            🔴 Açık ({countOpen})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'in_progress'}
+            className={`tab-btn${tab === 'in_progress' ? ' active' : ''}`}
+            onClick={() => setTab('in_progress')}
+          >
+            🟡 İşlemde ({countInProgress})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'resolved'}
+            className={`tab-btn${tab === 'resolved' ? ' active' : ''}`}
+            onClick={() => setTab('resolved')}
+          >
+            🟢 Çözüldü ({countResolved})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'all'}
+            className={`tab-btn${tab === 'all' ? ' active' : ''}`}
+            onClick={() => setTab('all')}
+          >
+            Tümü ({countAll})
+          </button>
+        </div>
+
+        {error && <div className="error-msg">⚠️ {error}</div>}
+
+        {loading ? (
+          <div className="spinner" />
+        ) : tickets.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">🎫</div>
+            {tab === 'open' ? 'Açık bilet yok — harika!' : 'Bu kategoride bilet yok'}
+          </div>
+        ) : (
+          <div className="ticket-list">
+            {tickets.map(t => (
+              <TicketCard key={t.id} ticket={t} onUpdated={load} />
+            ))}
+          </div>
+        )}
       </div>
 
-      {error && <div className="error-msg">⚠️ {error}</div>}
-
-      {loading ? (
-        <div className="spinner" />
-      ) : tickets.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">🎫</div>
-          {tab === 'open' ? 'Açık bilet yok — harika!' : 'Bu kategoride bilet yok'}
-        </div>
-      ) : (
-        <div className="ticket-list">
-          {tickets.map(t => (
-            <TicketCard key={t.id} ticket={t} onUpdated={load} />
-          ))}
-        </div>
-      )}
-
-      {/* Bilgi kartı */}
-      <div className="card" style={{ background: 'rgba(59,130,246,.05)', borderColor: 'rgba(59,130,246,.2)' }}>
-        <div className="card-title" style={{ color: 'var(--accent)' }}>🤖 AI Destekli Bilet Sistemi</div>
-        <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>
+      <div className="card panel-info-accent">
+        <div className="panel-info-accent-title">🤖 AI destekli bilet sistemi</div>
+        <p className="panel-info-accent-body">
           Biletler üç yoldan otomatik oluşturulur: <strong>(1)</strong> Müşteri chat'te sipariş iptali veya
           şikayet bildirdiğinde AI agent <code>create_ticket</code> aracını çağırır.
           <strong> (2)</strong> Kargo gecikmesi tespit edildiğinde LLM müşteri mesajı + iç not üretir.
           <strong> (3)</strong> Kritik stok uyarısında LLM sipariş miktarı önerisi + tedarikçi e-postası hazırlar.
-          AI içeriği "AI İçeriğini Göster" butonu ile tek tıkla görüntülenip kopyalanabilir.
+          AI içeriği &quot;AI İçeriğini Göster&quot; butonu ile tek tıkla görüntülenip kopyalanabilir.
         </p>
       </div>
     </>

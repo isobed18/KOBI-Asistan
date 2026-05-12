@@ -120,17 +120,17 @@ const NAV = [
   { to: '/orders',    Icon: IconNavShoppingCart, label: 'Siparişler' },
   { to: '/cargo',     Icon: IconNavTruck, label: 'Kargolar' },
   { to: '/reports',   Icon: IconNavFileBarChart, label: 'Raporlar' },
-  { to: '/tickets',   Icon: IconNavAlertTriangle, label: 'Mudahale', badge: 'openTickets' },
+  { to: '/tickets',   Icon: IconNavAlertTriangle, label: 'Müdahale', badge: 'openTickets' },
 ]
 
 const PAGE_TITLES = {
   '/':          { title: '', sub: '' },
   '/assistant': { title: 'AI Asistan', sub: '' },
-  '/tickets':   { title: 'Mudahale', sub: 'Insan onayi bekleyen konular' },
+  '/tickets':   { title: 'Müdahale', sub: 'İnsan onayı bekleyen konular' },
   '/orders':    { title: 'Siparişler', sub: '' },
   '/inventory': { title: 'Stoklar', sub: '' },
   '/cargo':     { title: 'Kargolar', sub: '' },
-  '/reports':   { title: 'Raporlar', sub: 'AI brifingleri ve icgoruler' },
+  '/reports':   { title: 'Raporlar', sub: '' },
 }
 
 function NotificationBell() {
