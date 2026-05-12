@@ -66,6 +66,42 @@ class OrderCreate(BaseModel):
     notes: Optional[str] = None
     items: List[dict]           # [{product_id, quantity}]
 
+
+class OrderItemInput(BaseModel):
+    product_id: int
+    quantity: int
+
+
+class OrderPatch(BaseModel):
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[str] = None  # SQLite yerel: YYYY-MM-DD HH:MM:SS veya datetime-local T ile
+    items: Optional[List[OrderItemInput]] = None
+
+
+class CargoShipmentCreate(BaseModel):
+    """Kargoda yeni sipariş + takip (tenant JWT). Ürün kalemi isteğe bağlı."""
+    customer_name: str
+    customer_phone: Optional[str] = None
+    notes: Optional[str] = None
+    cargo_tracking_code: str
+    cargo_company: str
+    items: Optional[List[OrderItemInput]] = None
+    estimated_delivery: Optional[str] = None
+    last_update: Optional[str] = None
+
+
+class CargoShipmentPatch(BaseModel):
+    """Kargodaki sipariş ve isteğe bağlı cargo_tracking alanları."""
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    cargo_tracking_code: Optional[str] = None
+    cargo_company: Optional[str] = None
+    cargo_status: Optional[str] = None
+    estimated_delivery: Optional[str] = None
+    last_update: Optional[str] = None
+
 #  ÖZET
 
 class DailySummary(BaseModel):

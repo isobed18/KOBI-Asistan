@@ -16,7 +16,7 @@ from langchain_core.tools import tool
 
 from agent.tenant_context import get_tenant_id
 from database.db import get_connection
-from repositories.orders import update_order_status
+from repositories.orders import UNSET, update_order_status
 from repositories.products import search_products, update_stock
 
 
@@ -139,9 +139,9 @@ def admin_siparis_guncelle(
         int(siparis_no),
         status,
         tenant_id=_tenant_id(),
-        cargo_tracking_code=kargo_kodu,
-        cargo_company=kargo_firmasi,
-        notes=siparis_notu,
+        cargo_tracking_code=kargo_kodu if kargo_kodu is not None else UNSET,
+        cargo_company=kargo_firmasi if kargo_firmasi is not None else UNSET,
+        notes=siparis_notu if siparis_notu is not None else UNSET,
     )
 
 

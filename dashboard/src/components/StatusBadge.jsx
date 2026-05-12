@@ -7,6 +7,8 @@ export const ORDER_STATUS = {
   'hazırlanıyor': { label: 'Hazırlanıyor', cls: 'badge-yellow' },
   'kargoda':      { label: 'Kargoda',      cls: 'badge-blue'   },
   'teslim_edildi':{ label: 'Teslim Edildi',cls: 'badge-green'  },
+  'tamamlandı':   { label: 'Tamamlandı',   cls: 'badge-green'  },
+  'tamamlandi':   { label: 'Tamamlandı',   cls: 'badge-green'  },
   'iptal':        { label: 'İptal',         cls: 'badge-red'   },
 }
 

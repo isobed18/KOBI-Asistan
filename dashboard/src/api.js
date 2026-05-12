@@ -20,15 +20,32 @@ async function req(path, options = {}) {
 // Dashboard
 export const getDashboardStats = () => req('/dashboard/stats')
 export const getCargoDashboard = () => req('/dashboard/cargo')
+export const markCargoDelayBildirildi = (orderId) =>
+  req('/dashboard/cargo/bildir', {
+    method: 'POST',
+    body: JSON.stringify({ order_id: orderId }),
+  })
+export const patchCargoShipment = (orderId, body) =>
+  req(`/dashboard/cargo/shipment/${orderId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const createCargoShipment = (body) =>
+  req('/dashboard/cargo/shipment', { method: 'POST', body: JSON.stringify(body) })
+export const deleteCargoShipment = (orderId) =>
+  req(`/dashboard/cargo/shipment/${orderId}`, { method: 'DELETE' })
 
-// Orders
+// Orders — GET /orders/ returns { items, total }
 export const getOrders = (params = {}) => {
-  const q = new URLSearchParams(params).toString()
+  const q = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== '')),
+  ).toString()
   return req(`/orders/${q ? '?' + q : ''}`)
 }
+export const getOrderStatusCounts = () => req('/orders/status-counts')
 export const getOrder = (id) => req(`/orders/${id}`)
 export const updateOrderStatus = (id, body) =>
   req(`/orders/${id}/status`, { method: 'PUT', body: JSON.stringify(body) })
+export const patchOrder = (id, body) =>
+  req(`/orders/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteOrder = (id) => req(`/orders/${id}`, { method: 'DELETE' })
 export const createOrder = (body) =>
   req('/orders/', { method: 'POST', body: JSON.stringify(body) })
 

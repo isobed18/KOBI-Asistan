@@ -215,6 +215,9 @@ def init_db():
         ensure_column("daily_reports", "source", "TEXT")
         ensure_column("daily_reports", "supersedes_id", "INTEGER")
 
+    # Kargo paneli: manuel "Bildir" ile isaretlenen gecikmeler (kalici)
+    ensure_column("orders", "cargo_delay_bildirildi_at", "TEXT")
+
     def ensure_index(name: str, ddl: str):
         cursor.execute(ddl)
 

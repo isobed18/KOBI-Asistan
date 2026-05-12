@@ -1,12 +1,20 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { generateAiTasks, getAnalytics, getDashboardStats, getSalesChart } from '../api.js'
+import { generateAiTasks, getDashboardStats, getSalesChart } from '../api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 function fmt(n) { return n?.toLocaleString('tr-TR') ?? '-' }
 function money(n) {
   return n != null ? `₺${n.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}` : '-'
+}
+
+function fmtUpdatedAt(s) {
+  if (!s) return '—'
+  const raw = typeof s === 'string' ? s.replace(' ', 'T') : s
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return String(s)
+  return d.toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 /** Eşik altı stokta ne kadar "boşluk" kaldığını 0–100 skorlar; görsel öncelik için. */
@@ -285,49 +293,176 @@ function OrdersStep({ stats }) {
   )
 }
 
-function ApprovalStep({ stats, analytics }) {
-  const tickets = stats.tickets.recent || []
-  const large = analytics?.large_orders || []
-  const repeat = analytics?.repeat_customers || []
+function CancelledTodayStep({ stats }) {
+  const rows = stats.orders?.cancelled_today || []
+  const count = Number(stats.orders?.cancelled_today_count) || 0
+  const title = count === 0
+    ? 'Bugün iptal kaydı yok'
+    : `Bugün ${fmt(count)} sipariş iptal edildi`
+
   return (
-    <div className="guided-step-grid">
-      <div className="guided-main-card">
-        <span className="guided-kicker">Onay bekleyenler</span>
-        <h2>Sadece karar gerektiren konular</h2>
-        <div className="guided-list">
-          {tickets.length === 0 && large.length === 0 ? (
-            <div className="guided-empty">Bugün onay bekleyen kritik konu yok.</div>
-          ) : (
-            <>
-              {tickets.slice(0, 4).map(t => (
-                <Link key={t.id} to="/tickets" className="guided-row urgent">
-                  <div><strong>{t.title}</strong><span>{t.type} · {t.priority}</span></div>
-                  <small>İncele →</small>
-                </Link>
-              ))}
-              {large.slice(0, 3).map(o => (
-                <Link key={o.id} to="/orders" className="guided-row">
-                  <div><strong>Yüklü sipariş #{o.id}</strong><span>{o.customer_name} · {o.total_items} adet · {money(o.total_price)}</span></div>
-                  <small>Onayla →</small>
-                </Link>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-      <aside className="guided-brief-card">
-        <span className="guided-kicker">Müşteri sinyali</span>
-        {repeat.length === 0 ? (
-          <p>Sadakat veya tekrar eden müşteri sinyali henüz belirgin değil.</p>
+    <div className="guided-main-card guided-stock-step">
+      <span className="guided-kicker">Bugünkü iptaller</span>
+      <h2>{title}</h2>
+      <p className="guided-muted guided-stock-step-lead">
+        Bugün iptal edilmiş siparişler listelenir; en son güncellenen üstte.
+        {count > rows.length ? ` En fazla ${fmt(rows.length)} kayıt gösteriliyor — tam liste için siparişler sayfasına gidin.` : ''}
+      </p>
+      {rows.length === 0 ? (
+        <div className="guided-empty guided-stock-empty">Bugün için iptal edilmiş sipariş bulunmuyor.</div>
+      ) : (
+        <ul className="guided-stock-list">
+          {rows.map((o) => (
+            <li key={o.id} className="guided-stock-item">
+              <Link to="/orders" className="guided-cancel-row-link">
+                <div className="guided-stock-item-top">
+                  <div className="guided-stock-item-name">
+                    <strong>Sipariş #{o.id}</strong>
+                    {o.customer_name ? <span className="guided-stock-cat">{o.customer_name}</span> : null}
+                  </div>
+                  <span className="guided-severity-pill guided-severity-pill--critical">İptal</span>
+                </div>
+                <div className="guided-stock-item-meta">
+                  <span>{money(o.total_price)}</span>
+                  <span className="guided-stock-meta-sep">·</span>
+                  <span>{fmtUpdatedAt(o.updated_at)}</span>
+                  {o.tracking_code ? (
+                    <>
+                      <span className="guided-stock-meta-sep">·</span>
+                      <span>{o.tracking_code}</span>
+                    </>
+                  ) : null}
+                  {o.customer_phone ? (
+                    <>
+                      <span className="guided-stock-meta-sep">·</span>
+                      <span>{o.customer_phone}</span>
+                    </>
+                  ) : null}
+                </div>
+                <div className="guided-severity-track" role="presentation">
+                  <div className="guided-severity-fill" data-band="critical" style={{ width: '100%' }} />
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link to="/orders" className="guided-link">Siparişlere git →</Link>
+    </div>
+  )
+}
+
+function PreparingShipmentStep({ stats }) {
+  const rows = stats.orders?.preparing_orders || []
+  const count = Number(stats.orders?.pending) || 0
+  const delayedRows = stats.cargo?.delayed || []
+  const delayedCount = Number(stats.cargo?.delayed_count) || 0
+
+  const prepTitle = count === 0
+    ? 'Kargoya verilecek hazır sipariş yok'
+    : `${fmt(count)} sipariş hazırlanmalı`
+
+  const delayedTitle = delayedCount === 0
+    ? 'Geciken veya riskli kargo yok'
+    : `${fmt(delayedCount)} gönderi gecikti`
+
+  return (
+    <div className="guided-preparing-cargo-grid">
+      <div className="guided-main-card guided-stock-step guided-stock-step--split">
+        <span className="guided-kicker">Kargoya gitmeyi bekleyenler</span>
+        <h2>{prepTitle}</h2>
+        <p className="guided-muted guided-stock-step-lead">
+          Aşağıdaki siparişler <strong>Hazırlanıyor</strong> aşamasında: paket hazır olduğunda kargo
+          takip numarasını ekleyin, gönderiyi kargoya verin ve durumu <strong>Kargoda</strong> olarak güncelleyin.
+          Müşteri, yola çıkış ve takip bilgisini yalnızca bu güncellemeden sonra görür.
+          {count > rows.length ? ` En fazla ${fmt(rows.length)} kayıt gösteriliyor — tamamı için siparişler sayfasına gidin.` : ''}
+        </p>
+        {rows.length === 0 ? (
+          <div className="guided-empty guided-stock-empty">Şu an hazırlanmayı bekleyen sipariş bulunmuyor.</div>
         ) : (
-          repeat.slice(0, 3).map(c => (
-            <div className="guided-mini-customer" key={c.customer_phone}>
-              <strong>{c.customer_name}</strong>
-              <span>{c.order_count} sipariş · {money(c.revenue)}</span>
-            </div>
-          ))
+          <ul className="guided-stock-list">
+            {rows.map((o) => (
+              <li key={o.id} className="guided-stock-item">
+                <Link to="/orders" className="guided-cancel-row-link">
+                  <div className="guided-stock-item-top">
+                    <div className="guided-stock-item-name">
+                      <strong>Sipariş #{o.id}</strong>
+                      {o.customer_name ? <span className="guided-stock-cat">{o.customer_name}</span> : null}
+                    </div>
+                    <span className="guided-severity-pill guided-severity-pill--mid">Hazırlanıyor</span>
+                  </div>
+                  <div className="guided-stock-item-meta">
+                    <span>{money(o.total_price)}</span>
+                    <span className="guided-stock-meta-sep">·</span>
+                    <span title="Sipariş zamanı">{fmtUpdatedAt(o.created_at)}</span>
+                    {o.tracking_code ? (
+                      <>
+                        <span className="guided-stock-meta-sep">·</span>
+                        <span>{o.tracking_code}</span>
+                      </>
+                    ) : null}
+                    {o.customer_phone ? (
+                      <>
+                        <span className="guided-stock-meta-sep">·</span>
+                        <span>{o.customer_phone}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="guided-severity-track" role="presentation">
+                    <div className="guided-severity-fill" data-band="mid" style={{ width: '72%' }} />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
-      </aside>
+        <Link to="/orders" className="guided-link">Siparişlere git →</Link>
+      </div>
+
+      <div className="guided-main-card guided-stock-step guided-stock-step--split">
+        <span className="guided-kicker">Geciken kargolar</span>
+        <h2>{delayedTitle}</h2>
+        <p className="guided-muted guided-stock-step-lead">
+          Kargoda olup taşıyıcı durumu şube bekliyor, gecikti veya iade sürecinde görünen gönderiler.
+          Müşteri iletişimi ve operasyon takibi için kargo ekranından güncelleyin.
+        </p>
+        {delayedRows.length === 0 ? (
+          <div className="guided-empty guided-stock-empty">Bu kriterlere uyan gönderi bulunmuyor.</div>
+        ) : (
+          <ul className="guided-stock-list">
+            {delayedRows.map((o) => (
+              <li key={o.id} className="guided-stock-item">
+                <Link to="/cargo" className="guided-cancel-row-link">
+                  <div className="guided-stock-item-top">
+                    <div className="guided-stock-item-name">
+                      <strong>Sipariş #{o.id}</strong>
+                      {o.customer_name ? <span className="guided-stock-cat">{o.customer_name}</span> : null}
+                    </div>
+                    <span className="guided-severity-pill guided-severity-pill--high">
+                      {o.current_status || '—'}
+                    </span>
+                  </div>
+                  <div className="guided-stock-item-meta">
+                    {o.cargo_company ? <span>{o.cargo_company}</span> : null}
+                    {o.cargo_company && o.cargo_tracking_code ? <span className="guided-stock-meta-sep">·</span> : null}
+                    {o.cargo_tracking_code ? <span>{o.cargo_tracking_code}</span> : null}
+                    {(o.cargo_company || o.cargo_tracking_code) && o.estimated_delivery ? (
+                      <span className="guided-stock-meta-sep">·</span>
+                    ) : null}
+                    {o.estimated_delivery ? (
+                      <span title="Tahmini teslim">Tahmini: {fmtUpdatedAt(o.estimated_delivery)}</span>
+                    ) : null}
+                  </div>
+                  <div className="guided-severity-track" role="presentation">
+                    <div className="guided-severity-fill" data-band="high" style={{ width: '85%' }} />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        <Link to="/cargo" className="guided-link">Kargo paneline git →</Link>
+      </div>
     </div>
   )
 }
@@ -368,16 +503,14 @@ export default function Overview() {
   const [step, setStep] = useState(0)
   const [stats, setStats] = useState(null)
   const [chart, setChart] = useState(null)
-  const [analytics, setAnalytics] = useState(null)
   const [aiTasks, setAiTasks] = useState(null)
   const [error, setError] = useState(null)
 
   const load = () => {
-    Promise.all([getDashboardStats(), getSalesChart(14), getAnalytics()])
-      .then(([s, c, a]) => {
+    Promise.all([getDashboardStats(), getSalesChart(14)])
+      .then(([s, c]) => {
         setStats(s)
         setChart(c)
-        setAnalytics(a)
         setError(null)
       })
       .catch(e => setError(e.message))
@@ -402,10 +535,11 @@ export default function Overview() {
       <WelcomeStep user={user} tenant={stats.tenant} />,
       <TodayStep stats={stats} chart={chart} latestReport={stats.latest_report} />,
       <OrdersStep stats={stats} />,
-      <ApprovalStep stats={stats} analytics={analytics} />,
+      <CancelledTodayStep stats={stats} />,
+      <PreparingShipmentStep stats={stats} />,
       <ActionsStep aiTasks={aiTasks} />,
     ]
-  }, [stats, chart, analytics, aiTasks, user])
+  }, [stats, chart, aiTasks, user])
 
   if (!stats && error) return <div className="error-msg">Sunucuya bağlanılamıyor: {error}</div>
   if (!stats) return <div className="guided-loading">İşletmeniz hazırlanıyor<span /><span /><span /></div>

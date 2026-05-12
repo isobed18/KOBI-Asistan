@@ -117,9 +117,9 @@ const NAV = [
   { to: '/',          Icon: IconNavClipboard, label: 'Günün özeti' },
   { to: '/assistant', Icon: IconNavSparkles, label: 'AI Asistan', highlight: true },
   { to: '/tickets',   Icon: IconNavAlertTriangle, label: 'Mudahale', badge: 'openTickets' },
-  { to: '/inventory', Icon: IconNavPackage, label: 'Stok' },
-  { to: '/orders',    Icon: IconNavShoppingCart, label: 'Siparisler' },
-  { to: '/cargo',     Icon: IconNavTruck, label: 'Kargo' },
+  { to: '/inventory', Icon: IconNavPackage, label: 'Stoklar' },
+  { to: '/orders',    Icon: IconNavShoppingCart, label: 'Siparişler' },
+  { to: '/cargo',     Icon: IconNavTruck, label: 'Kargolar' },
   { to: '/reports',   Icon: IconNavFileBarChart, label: 'Raporlar' },
 ]
 
@@ -127,9 +127,9 @@ const PAGE_TITLES = {
   '/':          { title: '', sub: '' },
   '/assistant': { title: 'AI Asistan', sub: 'Dogal dil ile stok, siparis ve bilet yonetimi' },
   '/tickets':   { title: 'Mudahale', sub: 'Insan onayi bekleyen konular' },
-  '/orders':    { title: 'Siparisler', sub: 'Hazirlik, kargo ve teslim surecleri' },
-  '/inventory': { title: '', sub: '' },
-  '/cargo':     { title: 'Kargo', sub: 'Gecikme ve teslimat sinyalleri' },
+  '/orders':    { title: 'Siparişler', sub: '' },
+  '/inventory': { title: 'Stoklar', sub: '' },
+  '/cargo':     { title: 'Kargolar', sub: '' },
   '/reports':   { title: 'Raporlar', sub: 'AI brifingleri ve icgoruler' },
 }
 

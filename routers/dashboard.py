@@ -2,7 +2,8 @@
 Dashboard Router — Yönetici Paneli için Toplu KPI Verisi
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 from datetime import date, timedelta
 import asyncio
 import json
@@ -13,7 +14,9 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from database.db import get_connection
+from database.schemas import CargoShipmentCreate, CargoShipmentPatch
 from agent.tenant_config import tenant_public_payload
+from repositories.orders import deduct_stock_on_order_created, delete_order_and_restore_stock
 from routers.auth_router import CurrentUser, get_current_user
 
 # ---------------------------------------------------------------------------
@@ -24,6 +27,10 @@ _ai_tasks_ts: float = 0
 _AI_TASKS_TTL = 900  # 15 dakika
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+class CargoDelayBildirRequest(BaseModel):
+    order_id: int
 
 
 def _build_live_briefing(
@@ -137,6 +144,39 @@ def get_dashboard_stats(current_user: CurrentUser = Depends(get_current_user)):
     ).fetchone()
     today_new_orders = int(today_orders_row["c"] if today_orders_row else 0)
 
+    cancelled_today_count_row = cursor.execute(
+        """
+        SELECT COUNT(*) AS c FROM orders
+        WHERE tenant_id = ? AND status = 'iptal'
+          AND date(updated_at) = date('now', 'localtime')
+        """,
+        (tenant_id,),
+    ).fetchone()
+    cancelled_today_count = int(cancelled_today_count_row["c"] if cancelled_today_count_row else 0)
+
+    cancelled_today_rows = cursor.execute(
+        """
+        SELECT id, customer_name, customer_phone, total_price, tracking_code, updated_at, notes
+        FROM orders
+        WHERE tenant_id = ? AND status = 'iptal'
+          AND date(updated_at) = date('now', 'localtime')
+        ORDER BY updated_at DESC
+        LIMIT 50
+        """,
+        (tenant_id,),
+    ).fetchall()
+
+    preparing_rows = cursor.execute(
+        """
+        SELECT id, customer_name, customer_phone, total_price, tracking_code, created_at, updated_at, notes
+        FROM orders
+        WHERE tenant_id = ? AND status = 'hazırlanıyor'
+        ORDER BY datetime(created_at) ASC
+        LIMIT 50
+        """,
+        (tenant_id,),
+    ).fetchall()
+
     # Son rapor (kiracıya özel; bugün veya en son)
     latest_report = cursor.execute("""
         SELECT id, tenant_id, date, report_text, briefing_json, raw_data, model_version, source, created_at
@@ -212,6 +252,9 @@ def get_dashboard_stats(current_user: CurrentUser = Depends(get_current_user)):
             "in_cargo": by_status.get("kargoda", 0),
             "delivered": by_status.get("teslim_edildi", 0),
             "cancelled": by_status.get("iptal", 0),
+            "cancelled_today": [dict(r) for r in cancelled_today_rows],
+            "cancelled_today_count": cancelled_today_count,
+            "preparing_orders": [dict(r) for r in preparing_rows],
         },
         "stock": {
             "critical_count": len(low_stock),
@@ -333,6 +376,7 @@ def get_cargo_dashboard(current_user: CurrentUser = Depends(get_current_user)):
             o.total_price,
             o.created_at  AS order_date,
             o.updated_at,
+            o.cargo_delay_bildirildi_at AS delay_bildirildi_at,
             ct.current_status AS cargo_status,
             ct.estimated_delivery,
             ct.last_update    AS cargo_last_update
@@ -356,6 +400,304 @@ def get_cargo_dashboard(current_user: CurrentUser = Depends(get_current_user)):
         "delayed_count": sum(1 for r in result if r["is_delayed"]),
         "shipments": result,
     }
+
+
+@router.post("/cargo/bildir", summary="Kargo gecikmesi bildirildi olarak kaydet")
+def post_cargo_delay_bildir(
+    body: CargoDelayBildirRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Siparis satirinda kalici isaret; Kargolar tablosunda 'Bildirildi' olarak kalir."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE orders
+        SET cargo_delay_bildirildi_at = datetime('now', 'localtime'),
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ? AND tenant_id = ? AND status = 'kargoda'
+        """,
+        (body.order_id, current_user.tenant_id),
+    )
+    if cursor.rowcount == 0:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(
+            status_code=404,
+            detail="Sipariş bulunamadı veya artık kargoda değil.",
+        )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+def _normalize_sqlite_datetime(s: str | None) -> str | None:
+    if s is None:
+        return None
+    t = (s or "").strip().replace("T", " ")
+    if not t:
+        return None
+    if len(t) == 16 and t.count(":") == 1:
+        t += ":00"
+    return t
+
+
+def _ensure_cargo_tracking_row(cursor, tracking_code: str, company: str | None) -> None:
+    code = (tracking_code or "").strip()
+    if not code:
+        return
+    row = cursor.execute("SELECT 1 FROM cargo_tracking WHERE tracking_code = ?", (code,)).fetchone()
+    if row:
+        return
+    comp = (company or "").strip() or "Kargo"
+    cursor.execute(
+        """
+        INSERT INTO cargo_tracking (tracking_code, company, current_status, estimated_delivery, last_update)
+        VALUES (?, ?, 'Dağıtıma Çıktı', NULL, datetime('now', 'localtime'))
+        """,
+        (code, comp),
+    )
+
+
+@router.post("/cargo/shipment", summary="Kargoda yeni siparis olustur", status_code=201)
+def create_cargo_shipment(
+    body: CargoShipmentCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    tenant_id = current_user.tenant_id
+    code = (body.cargo_tracking_code or "").strip()
+    comp = (body.cargo_company or "").strip()
+    if not code or not comp:
+        raise HTTPException(status_code=400, detail="Kargo kodu ve firma zorunludur.")
+    name = (body.customer_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Musteri adi zorunludur.")
+
+    items_list = list(body.items) if body.items else []
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        total = 0.0
+        item_rows: list[tuple[int, int, float]] = []
+        for item in items_list:
+            pid = int(item.product_id)
+            qty = int(item.quantity)
+            if qty < 1:
+                raise HTTPException(status_code=400, detail="Adet 1 veya daha buyuk olmalidir.")
+            product = cursor.execute(
+                """
+                SELECT id, price, stock_quantity
+                FROM products
+                WHERE id = ? AND is_active = 1 AND tenant_id = ?
+                """,
+                (pid, tenant_id),
+            ).fetchone()
+            if not product:
+                raise HTTPException(status_code=404, detail=f"Urun #{pid} bulunamadi.")
+            if int(product["stock_quantity"]) < qty:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Urun #{pid} icin yeterli stok yok. Mevcut: {product['stock_quantity']}"
+                    ),
+                )
+            subtotal = float(product["price"]) * qty
+            total += subtotal
+            item_rows.append((pid, qty, float(product["price"])))
+
+        notes = body.notes
+        if notes is not None:
+            notes = (notes or "").strip() or None
+
+        cursor.execute(
+            """
+            INSERT INTO orders (tenant_id, customer_name, customer_phone, notes, total_price)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (tenant_id, name, (body.customer_phone or "").strip() or None, notes, total),
+        )
+        order_id = int(cursor.lastrowid)
+
+        for product_id, quantity, unit_price in item_rows:
+            cursor.execute(
+                """
+                INSERT INTO order_items (order_id, product_id, quantity, unit_price)
+                VALUES (?, ?, ?, ?)
+                """,
+                (order_id, product_id, quantity, unit_price),
+            )
+
+        if item_rows:
+            deduct_stock_on_order_created(conn, order_id, tenant_id)
+
+        cursor.execute(
+            """
+            UPDATE orders
+            SET status = 'kargoda',
+                cargo_tracking_code = ?,
+                cargo_company = ?,
+                updated_at = datetime('now', 'localtime')
+            WHERE id = ? AND tenant_id = ?
+            """,
+            (code, comp, order_id, tenant_id),
+        )
+
+        est = (body.estimated_delivery or "").strip() or None
+        lu = _normalize_sqlite_datetime(body.last_update)
+        if not lu:
+            lu = cursor.execute("SELECT datetime('now', 'localtime') AS t").fetchone()["t"]
+
+        ex = cursor.execute(
+            "SELECT 1 FROM cargo_tracking WHERE tracking_code = ?",
+            (code,),
+        ).fetchone()
+        if ex:
+            cursor.execute(
+                """
+                UPDATE cargo_tracking
+                SET company = ?, estimated_delivery = ?, last_update = ?
+                WHERE tracking_code = ?
+                """,
+                (comp, est, lu, code),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO cargo_tracking (tracking_code, company, current_status, estimated_delivery, last_update)
+                VALUES (?, ?, 'Dağıtıma Çıktı', ?, ?)
+                """,
+                (code, comp, est, lu),
+            )
+
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    except ValueError as e:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        conn.close()
+
+    return {"message": "Kargo kaydi olusturuldu.", "order_id": order_id, "total_price": total}
+
+
+@router.patch("/cargo/shipment/{order_id}", summary="Kargodaki siparisi ve takip bilgisini guncelle")
+def patch_cargo_shipment(
+    order_id: int,
+    body: CargoShipmentPatch,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    tenant_id = current_user.tenant_id
+    if not body.model_dump(exclude_unset=True):
+        raise HTTPException(status_code=400, detail="Guncellenecek alan yok.")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        conn.execute("BEGIN")
+        order = cursor.execute(
+            """
+            SELECT id, status, customer_name, customer_phone, cargo_tracking_code, cargo_company
+            FROM orders WHERE id = ? AND tenant_id = ?
+            """,
+            (order_id, tenant_id),
+        ).fetchone()
+        if not order:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Siparis bulunamadi.")
+        if order["status"] != "kargoda":
+            conn.rollback()
+            raise HTTPException(status_code=400, detail="Yalnizca kargodaki siparisler duzenlenebilir.")
+
+        osets: list[str] = []
+        oparams: list = []
+
+        if body.customer_name is not None:
+            osets.append("customer_name = ?")
+            oparams.append((body.customer_name or "").strip())
+        if body.customer_phone is not None:
+            osets.append("customer_phone = ?")
+            v = (body.customer_phone or "").strip()
+            oparams.append(v or None)
+        if body.cargo_tracking_code is not None:
+            osets.append("cargo_tracking_code = ?")
+            oparams.append((body.cargo_tracking_code or "").strip() or None)
+        if body.cargo_company is not None:
+            osets.append("cargo_company = ?")
+            oparams.append((body.cargo_company or "").strip() or None)
+
+        if osets:
+            osets.append("updated_at = datetime('now', 'localtime')")
+            oparams.extend([order_id, tenant_id])
+            cursor.execute(
+                f"UPDATE orders SET {', '.join(osets)} WHERE id = ? AND tenant_id = ?",
+                oparams,
+            )
+
+        order2 = cursor.execute(
+            """
+            SELECT cargo_tracking_code, cargo_company
+            FROM orders WHERE id = ? AND tenant_id = ?
+            """,
+            (order_id, tenant_id),
+        ).fetchone()
+        tcode = (order2["cargo_tracking_code"] or "").strip() if order2 else ""
+        tcomp = (order2["cargo_company"] or "").strip() if order2 else ""
+
+        if any(getattr(body, k) is not None for k in ("cargo_status", "estimated_delivery", "last_update")) or (
+            body.cargo_company is not None and tcode
+        ):
+            if not tcode:
+                conn.rollback()
+                raise HTTPException(status_code=400, detail="Takip alanlari icin once kargo kodu girin.")
+
+            _ensure_cargo_tracking_row(cursor, tcode, tcomp or None)
+
+            tsets: list[str] = []
+            tparams: list = []
+            if body.cargo_status is not None:
+                tsets.append("current_status = ?")
+                tparams.append((body.cargo_status or "").strip() or "—")
+            if body.estimated_delivery is not None:
+                tsets.append("estimated_delivery = ?")
+                ev = (body.estimated_delivery or "").strip() or None
+                tparams.append(ev)
+            if body.last_update is not None:
+                lu = _normalize_sqlite_datetime(body.last_update)
+                if lu:
+                    tsets.append("last_update = ?")
+                    tparams.append(lu)
+            if body.cargo_company is not None and tcode:
+                tsets.append("company = ?")
+                tparams.append((body.cargo_company or "").strip() or "Kargo")
+            if tsets:
+                tparams.append(tcode)
+                cursor.execute(
+                    f"UPDATE cargo_tracking SET {', '.join(tsets)} WHERE tracking_code = ?",
+                    tparams,
+                )
+
+        conn.commit()
+    except HTTPException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@router.delete("/cargo/shipment/{order_id}", summary="Kargodaki siparisi sil (stok iade)")
+def delete_cargo_shipment(
+    order_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    result = delete_order_and_restore_stock(order_id, tenant_id=current_user.tenant_id)
+    if result.get("hata"):
+        raise HTTPException(status_code=404, detail=result["hata"])
+    return {"ok": True}
 
 
 @router.get("/sales-chart", summary="Gunluk satis grafigi (canli siparisler)")
