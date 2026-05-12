@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from typing import Optional
 import sys
 import os
@@ -10,6 +10,7 @@ from database.schemas import ProductCreate, ProductPatch, StockUpdateRequest
 from agent.tenant_context import get_tenant_id
 from repositories.products import deactivate_product as repo_deactivate_product
 from repositories.products import patch_product as repo_patch_product
+from services.stock_intervention import schedule_stock_intervention_check
 
 router = APIRouter(prefix="/products", tags=["Ürünler"])
 
@@ -86,7 +87,7 @@ def create_product(body: ProductCreate):
 
 #  PATCH /products/{id}
 @router.patch("/{product_id}", summary="Ürün alanlarını güncelle")
-def patch_product(product_id: int, body: ProductPatch):
+def patch_product(product_id: int, body: ProductPatch, background_tasks: BackgroundTasks):
     """İsim, kategori, fiyat, stok ve eşik değerlerini doğrudan günceller; stok değişirse hareket kaydı oluşturulur."""
     data = body.model_dump(exclude_unset=True)
     if not data:
@@ -96,12 +97,17 @@ def patch_product(product_id: int, body: ProductPatch):
     if out.get("hata"):
         code = 404 if "bulunamadi" in (out["hata"] or "").lower() else 400
         raise HTTPException(status_code=code, detail=out["hata"])
-    return _add_low_stock_flag(dict(out["urun"]))
+    urun = _add_low_stock_flag(dict(out["urun"]))
+    if {"stock_quantity", "low_stock_threshold"} & data.keys():
+        if urun.get("is_active", 1) and urun.get("stock_quantity", 10**9) <= urun.get("low_stock_threshold", 0):
+            tid = get_tenant_id()
+            background_tasks.add_task(schedule_stock_intervention_check, product_id, tid)
+    return urun
 
 
 #  PATCH /products/{id}/stock
 @router.patch("/{product_id}/stock", summary="Stok güncelle")
-def update_stock(product_id: int, body: StockUpdateRequest):
+def update_stock(product_id: int, body: StockUpdateRequest, background_tasks: BackgroundTasks):
     """
     quantity_change pozitif ise stok artar, negatif ise azalır.
     Örnek: {"quantity_change": 50, "reason": "Yeni sevkiyat"}
@@ -135,6 +141,8 @@ def update_stock(product_id: int, body: StockUpdateRequest):
     """, (get_tenant_id(), product_id, body.quantity_change, body.reason or "manuel", old_qty, new_qty))
     conn.commit()
     conn.close()
+    tid = get_tenant_id()
+    background_tasks.add_task(schedule_stock_intervention_check, product_id, tid)
     return {
         "message": "Stok güncellendi.",
         "product_id": product_id,

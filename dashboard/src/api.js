@@ -20,11 +20,6 @@ async function req(path, options = {}) {
 // Dashboard
 export const getDashboardStats = () => req('/dashboard/stats')
 export const getCargoDashboard = () => req('/dashboard/cargo')
-export const markCargoDelayBildirildi = (orderId) =>
-  req('/dashboard/cargo/bildir', {
-    method: 'POST',
-    body: JSON.stringify({ order_id: orderId }),
-  })
 export const patchCargoShipment = (orderId, body) =>
   req(`/dashboard/cargo/shipment/${orderId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const createCargoShipment = (body) =>

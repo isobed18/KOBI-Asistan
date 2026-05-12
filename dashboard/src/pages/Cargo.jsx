@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   createCargoShipment,
-  createTicketManual,
   deleteCargoShipment,
   getCargoDashboard,
-  markCargoDelayBildirildi,
   patchCargoShipment,
 } from '../api.js'
 import SortableTh from '../components/SortableTh.jsx'
+import ListPagination from '../components/ListPagination.jsx'
+import {
+  IconEmptyTruck,
+  IconSearchEmpty,
+  IconTabAlert,
+  IconTabCheckCircle,
+} from '../components/DataListIcons.jsx'
 import { cmpBool, cmpNullableStr, cmpNum, cmpTime } from '../utils/tableSort.js'
 
 const LONG_PRESS_DELETE_MS = 620
+const PAGE_SIZE = 20
 
 function fmtDate(s) {
   return s
@@ -309,15 +315,24 @@ function AddCargoModal({ onClose, onCreated }) {
 
 function StatusDot({ delayed }) {
   return delayed
-    ? <><span className="dot dot-yellow" />Gecikmeli</>
-    : <><span className="dot dot-green" />Aktif</>
+    ? (
+      <>
+        <span className="dot dot-delayed" />
+        <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Gecikmeli</span>
+      </>
+    )
+    : (
+      <>
+        <span className="dot dot-ontime" />
+        <span style={{ color: 'var(--text2)' }}>Aktif</span>
+      </>
+    )
 }
 
 export default function Cargo() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [ticketMsg, setTicketMsg] = useState({})
   const [tab, setTab] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [sortKey, setSortKey] = useState('order_id')
@@ -328,6 +343,7 @@ export default function Cargo() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [holdRowId, setHoldRowId] = useState(null)
+  const [page, setPage] = useState(0)
   const longPressTimerRef = useRef(null)
   const longPressShipmentRef = useRef(null)
 
@@ -391,28 +407,6 @@ export default function Cargo() {
       .finally(() => setSavingId(null))
   }
 
-  const openTicket = async shipment => {
-    setTicketMsg(prev => ({ ...prev, [shipment.order_id]: 'loading' }))
-    try {
-      await createTicketManual({
-        type: 'cargo_delay',
-        title: `Kargo Gecikmesi — Sipariş #${shipment.order_id} (${shipment.customer_name})`,
-        description: `Sipariş #${shipment.order_id} kargo durumu: '${shipment.cargo_status}'. Kargo kodu: ${shipment.cargo_tracking_code}. Müşteri: ${shipment.customer_name}`,
-        priority: 'high',
-        related_order_id: shipment.order_id,
-      })
-      await markCargoDelayBildirildi(shipment.order_id)
-      await load({ silent: true })
-      setTicketMsg(prev => {
-        const next = { ...prev }
-        delete next[shipment.order_id]
-        return next
-      })
-    } catch (e) {
-      setTicketMsg(prev => ({ ...prev, [shipment.order_id]: `hata: ${e.message}` }))
-    }
-  }
-
   const all = data?.shipments ?? []
   const delayed = all.filter(s => s.is_delayed)
   const active = all.filter(s => !s.is_delayed)
@@ -428,7 +422,6 @@ export default function Cargo() {
         s.customer_phone ?? '',
         s.cargo_tracking_code ?? '',
         s.cargo_company ?? '',
-        s.cargo_status ?? '',
         s.estimated_delivery ?? '',
       ]
         .join(' ')
@@ -458,9 +451,6 @@ export default function Cargo() {
         case 'cargo_company':
           cmp = cmpNullableStr(a.cargo_company, b.cargo_company)
           break
-        case 'cargo_status':
-          cmp = cmpNullableStr(a.cargo_status, b.cargo_status)
-          break
         case 'estimated_delivery': {
           const ta = a?.estimated_delivery ? Date.parse(a.estimated_delivery) : NaN
           const tb = b?.estimated_delivery ? Date.parse(b.estimated_delivery) : NaN
@@ -481,6 +471,20 @@ export default function Cargo() {
     })
     return rows
   }, [searchFiltered, sortKey, sortDir])
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE) || 1)
+  const pageRows = useMemo(
+    () => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [sorted, page],
+  )
+
+  useEffect(() => {
+    setPage(0)
+  }, [tab, searchQuery, sortKey, sortDir])
+
+  useEffect(() => {
+    if (page >= totalPages) setPage(Math.max(0, totalPages - 1))
+  }, [page, totalPages])
 
   const rowPointerDown = s => e => {
     if (loading || savingId === s.order_id) return
@@ -553,7 +557,7 @@ export default function Cargo() {
             <input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Sipariş no, müşteri, telefon, kargo kodu, firma veya durum…"
+              placeholder="Sipariş no, müşteri, telefon, kargo kodu, firma veya tahmini teslim…"
               type="search"
               autoComplete="off"
             />
@@ -569,25 +573,44 @@ export default function Cargo() {
         </p>
       </div>
 
-      <div className="card">
+      <div className="card data-list-card">
         {error && <div className="error-msg" style={{ marginBottom: 12 }}>⚠️ {error}</div>}
         <div className="tab-bar" style={{ marginBottom: 12 }}>
           <button type="button" className={`tab-btn${tab === 'all' ? ' active' : ''}`} onClick={() => setTab('all')}>
             Tümü ({all.length})
           </button>
           <button type="button" className={`tab-btn${tab === 'delayed' ? ' active' : ''}`} onClick={() => setTab('delayed')}>
-            ⚠️ Gecikmeli ({delayed.length})
+            <span className="tab-btn-icon" aria-hidden>
+              <IconTabAlert />
+            </span>
+            Gecikmeli ({delayed.length})
           </button>
           <button type="button" className={`tab-btn${tab === 'active' ? ' active' : ''}`} onClick={() => setTab('active')}>
-            ✅ Sorunsuz ({active.length})
+            <span className="tab-btn-icon" aria-hidden>
+              <IconTabCheckCircle />
+            </span>
+            Sorunsuz ({active.length})
           </button>
         </div>
+
+        {!loading && shown.length > 0 && sorted.length > 0 && (
+          <ListPagination
+            page={page}
+            totalPages={totalPages}
+            total={sorted.length}
+            loading={loading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+          />
+        )}
 
         {loading ? (
           <div className="spinner" />
         ) : shown.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🚚</div>
+            <div className="empty-icon empty-icon--svg" aria-hidden>
+              <IconEmptyTruck />
+            </div>
             {tab === 'delayed' ? 'Gecikmeli kargo yok' : 'Kargoda sipariş yok'}
             <button type="button" className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setAddOpen(true)}>
               + Yeni kargo ekle
@@ -595,7 +618,9 @@ export default function Cargo() {
           </div>
         ) : sorted.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🔎</div>
+            <div className="empty-icon empty-icon--svg" aria-hidden>
+              <IconSearchEmpty />
+            </div>
             Aramanızla eşleşen kargo kaydı yok
           </div>
         ) : (
@@ -618,9 +643,6 @@ export default function Cargo() {
                   <SortableTh columnKey="cargo_company" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>
                     Firma
                   </SortableTh>
-                  <SortableTh columnKey="cargo_status" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>
-                    Kargo Durumu
-                  </SortableTh>
                   <SortableTh columnKey="estimated_delivery" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>
                     Tahmini Teslimat
                   </SortableTh>
@@ -630,20 +652,19 @@ export default function Cargo() {
                   <SortableTh columnKey="is_delayed" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>
                     Durum
                   </SortableTh>
-                  <th aria-label="İşlemler" />
                 </tr>
               </thead>
               <tbody>
-                {sorted.map(s => (
+                {pageRows.map(s => (
                   <tr
                     key={s.order_id}
                     className={[
                       holdRowId === s.order_id ? 'inventory-row-holding' : '',
                       savingId === s.order_id ? 'row-saving' : '',
+                      s.is_delayed ? 'data-table-row--risk' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    style={s.is_delayed ? { background: 'rgba(239,68,68,.04)' } : {}}
                     title="Düzenleme: çift tıklayın · Silmek: satıra basılı tutun"
                     onPointerDown={rowPointerDown(s)}
                     onPointerUp={rowPointerEnd}
@@ -714,7 +735,7 @@ export default function Cargo() {
                           onDismiss={() => setEditCell(null)}
                         />
                       ) : (
-                        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{s.cargo_tracking_code || '—'}</span>
+                        <span style={{ fontFamily: 'monospace' }}>{s.cargo_tracking_code || '—'}</span>
                       )}
                     </td>
                     <td
@@ -740,32 +761,8 @@ export default function Cargo() {
                       )}
                     </td>
                     <td
-                      className={cellClass(s, 'cargo_status', true)}
-                      title="Düzenlemek için çift tıklayın"
-                      onDoubleClick={() => {
-                        if (loading || savingId === s.order_id || isEditing(s.order_id, 'cargo_status')) return
-                        setEditCell({ id: s.order_id, field: 'cargo_status' })
-                      }}
-                    >
-                      {isEditing(s.order_id, 'cargo_status') ? (
-                        <InlineTextEditor
-                          initialValue={s.cargo_status || ''}
-                          disabled={loading || savingId === s.order_id}
-                          onSubmit={st => {
-                            setEditCell(null)
-                            applyPatch(s.order_id, { cargo_status: st })
-                          }}
-                          onDismiss={() => setEditCell(null)}
-                        />
-                      ) : (
-                        <span style={{ color: s.is_delayed ? 'var(--danger)' : 'var(--text2)', fontWeight: s.is_delayed ? 600 : 400 }}>
-                          {s.cargo_status || '—'}
-                        </span>
-                      )}
-                    </td>
-                    <td
                       className={cellClass(s, 'estimated_delivery', true)}
-                      style={{ color: 'var(--text3)', fontSize: 12 }}
+                      style={{ color: 'var(--text3)' }}
                       title="Düzenlemek için çift tıklayın"
                       onDoubleClick={() => {
                         if (loading || savingId === s.order_id || isEditing(s.order_id, 'estimated_delivery')) return
@@ -789,7 +786,7 @@ export default function Cargo() {
                     </td>
                     <td
                       className={cellClass(s, 'cargo_last_update', true)}
-                      style={{ color: 'var(--text3)', fontSize: 12 }}
+                      style={{ color: 'var(--text3)' }}
                       title="Düzenlemek için çift tıklayın"
                       onDoubleClick={() => {
                         if (loading || savingId === s.order_id || isEditing(s.order_id, 'cargo_last_update')) return
@@ -811,31 +808,31 @@ export default function Cargo() {
                       )}
                     </td>
                     <td>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 12 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <StatusDot delayed={s.is_delayed} />
+                        {s.is_delayed && (
+                          <span className="badge badge-gray" title="Müdahale kaydı kargo durumu kaydedildiğinde otomatik oluşur">
+                            Otomatik müdahale
+                          </span>
+                        )}
                       </span>
-                    </td>
-                    <td>
-                      {ticketMsg[s.order_id] === 'loading' ? (
-                        <span className="badge badge-gray">…</span>
-                      ) : s.delay_bildirildi_at ? (
-                        <span className="badge badge-green">✓ Bildirildi</span>
-                      ) : s.is_delayed ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                          {typeof ticketMsg[s.order_id] === 'string' && ticketMsg[s.order_id].startsWith('hata:') && (
-                            <span style={{ fontSize: 11, color: 'var(--danger)', maxWidth: 180 }}>{ticketMsg[s.order_id]}</span>
-                          )}
-                          <button type="button" className="btn btn-danger btn-sm" onClick={() => openTicket(s)}>
-                            Bildir
-                          </button>
-                        </div>
-                      ) : null}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && shown.length > 0 && sorted.length > 0 && (
+          <ListPagination
+            footer
+            page={page}
+            totalPages={totalPages}
+            total={sorted.length}
+            loading={loading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+          />
         )}
       </div>
     </>

@@ -12,14 +12,22 @@ import {
 } from '../api.js'
 import StatusBadge, { ORDER_STATUS } from '../components/StatusBadge.jsx'
 import SortableTh from '../components/SortableTh.jsx'
+import ListPagination from '../components/ListPagination.jsx'
+import {
+  IconEmptyPackage,
+  IconTabBan,
+  IconTabCheckCircle,
+  IconTabClipboard,
+  IconTabTruck,
+} from '../components/DataListIcons.jsx'
 import { cmpNullableStr, cmpNum, cmpTime } from '../utils/tableSort.js'
 
 const STATUS_TABS = [
-  { key: 'all', label: 'Tümü', emoji: '' },
-  { key: 'hazırlanıyor', label: 'Hazırlanıyor', emoji: '📋' },
-  { key: 'kargoda', label: 'Kargoda', emoji: '🚚' },
-  { key: 'teslim_edildi', label: 'Teslim', emoji: '✅' },
-  { key: 'iptal', label: 'İptal', emoji: '⛔' },
+  { key: 'all', label: 'Tümü', Icon: null },
+  { key: 'hazırlanıyor', label: 'Hazırlanıyor', Icon: IconTabClipboard },
+  { key: 'kargoda', label: 'Kargoda', Icon: IconTabTruck },
+  { key: 'teslim_edildi', label: 'Teslim', Icon: IconTabCheckCircle },
+  { key: 'iptal', label: 'İptal', Icon: IconTabBan },
 ]
 
 const STATUSES = STATUS_TABS.filter(t => t.key !== 'all').map(t => t.key)
@@ -37,6 +45,15 @@ function isTerminalCompletedStatus(status) {
 
 function normalizeOrderStatusForSelect(status) {
   return status === 'tamamlandi' ? 'tamamlandı' : status
+}
+
+function orderRowToneClass(status) {
+  const s = normalizeOrderStatusForSelect(status)
+  if (s === 'iptal') return 'data-table-row--risk'
+  if (s === 'hazırlanıyor') return 'data-table-row--warn'
+  if (s === 'kargoda') return 'data-table-row--info'
+  if (s === 'teslim_edildi' || s === 'tamamlandı') return 'data-table-row--success'
+  return ''
 }
 
 /** Durum select: yalnızca sekme durumları (tamamlandı seçilemez) */
@@ -999,36 +1016,33 @@ export default function Orders() {
         </p>
       </div>
 
-      <div className="card">
+      <div className="card data-list-card">
         <div className="tab-bar">
-          {STATUS_TABS.map(({ key, label, emoji }) => (
+          {STATUS_TABS.map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
               className={`tab-btn${tab === key ? ' active' : ''}`}
               onClick={() => setTab(key)}
             >
-              {emoji ? `${emoji} ${label}` : label} ({tabCounts[key] ?? 0})
+              {Icon ? (
+                <span className="tab-btn-icon" aria-hidden>
+                  <Icon />
+                </span>
+              ) : null}
+              {label} ({tabCounts[key] ?? 0})
             </button>
           ))}
         </div>
 
-        <div className="orders-pagination-bar" role="navigation" aria-label="Sayfa gezgini">
-          <button type="button" className="btn btn-ghost btn-sm" disabled={page <= 0 || loading} onClick={() => setPage(p => Math.max(0, p - 1))}>
-            ← Önceki
-          </button>
-          <span className="orders-pagination-meta">
-            Sayfa {page + 1} / {totalPages} · {total} kayıt
-          </span>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            disabled={loading || (page + 1) * PAGE_SIZE >= total}
-            onClick={() => setPage(p => p + 1)}
-          >
-            Sonraki →
-          </button>
-        </div>
+        <ListPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          loading={loading}
+          onPrev={() => setPage(p => Math.max(0, p - 1))}
+          onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+        />
 
         {loading ? (
           <div className="spinner" />
@@ -1036,7 +1050,9 @@ export default function Orders() {
           <div className="error-msg">⚠️ {error}</div>
         ) : sorted.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📦</div>
+            <div className="empty-icon empty-icon--svg" aria-hidden>
+              <IconEmptyPackage />
+            </div>
             Sipariş bulunamadı
           </div>
         ) : (
@@ -1078,6 +1094,7 @@ export default function Orders() {
                     className={[
                       holdRowId === o.id ? 'inventory-row-holding' : '',
                       savingId === o.id ? 'row-saving' : '',
+                      orderRowToneClass(o.status),
                     ]
                       .filter(Boolean)
                       .join(' ')}
@@ -1161,7 +1178,7 @@ export default function Orders() {
                     </td>
                     <td
                       className={cellClass(o, 'cargo_code', true)}
-                      style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text2)' }}
+                      style={{ fontFamily: 'monospace', color: 'var(--text2)' }}
                       title="Düzenlemek için çift tıklayın"
                       onDoubleClick={() => {
                         if (loading || savingId === o.id || isEditing(o.id, 'cargo_code')) return
@@ -1186,7 +1203,7 @@ export default function Orders() {
                     </td>
                     <td
                       className={cellClass(o, 'cargo_company', true)}
-                      style={{ fontSize: 12, color: 'var(--text2)' }}
+                      style={{ color: 'var(--text2)' }}
                       title="Düzenlemek için çift tıklayın"
                       onDoubleClick={() => {
                         if (loading || savingId === o.id || isEditing(o.id, 'cargo_company')) return
@@ -1210,7 +1227,7 @@ export default function Orders() {
                     <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmtMoney(o.total_price)}</td>
                     <td
                       className={cellClass(o, 'created_at', true)}
-                      style={{ color: 'var(--text3)', fontSize: 12 }}
+                      style={{ color: 'var(--text3)' }}
                       title="Düzenlemek için çift tıklayın"
                       onDoubleClick={() => {
                         if (loading || savingId === o.id || isEditing(o.id, 'created_at')) return
@@ -1244,22 +1261,15 @@ export default function Orders() {
         )}
 
         {!loading && sorted.length > 0 && (
-          <div className="orders-pagination-bar orders-pagination-bar--footer" role="navigation" aria-label="Sayfa gezgini alt">
-            <button type="button" className="btn btn-ghost btn-sm" disabled={page <= 0} onClick={() => setPage(p => Math.max(0, p - 1))}>
-              ← Önceki
-            </button>
-            <span className="orders-pagination-meta">
-              Sayfa {page + 1} / {totalPages}
-            </span>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              disabled={(page + 1) * PAGE_SIZE >= total}
-              onClick={() => setPage(p => p + 1)}
-            >
-              Sonraki →
-            </button>
-          </div>
+          <ListPagination
+            footer
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            loading={loading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+          />
         )}
       </div>
     </>

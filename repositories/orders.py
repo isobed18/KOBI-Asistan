@@ -244,11 +244,26 @@ def update_order_status(
 
     conn.commit()
     conn.close()
+
+    old_status = order["status"]
+    if status == "iptal" and old_status != "iptal":
+        try:
+            from services.order_intervention import create_order_cancelled_intervention_ticket
+
+            create_order_cancelled_intervention_ticket(
+                order_id=order_id,
+                customer_name=order["customer_name"] or "",
+                tenant_id=tenant_id,
+                previous_status=old_status,
+            )
+        except Exception:
+            pass
+
     result = {
         "basari": True,
         "siparis_no": order_id,
         "musteri": order["customer_name"],
-        "eski_durum": order["status"],
+        "eski_durum": old_status,
         "yeni_durum": status,
         "kargo_kodu": None if cargo_tracking_code is UNSET else (cargo_tracking_code or None),
         "kargo_firmasi": None if cargo_company is UNSET else (cargo_company or None),

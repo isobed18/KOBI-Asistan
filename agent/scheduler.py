@@ -15,12 +15,9 @@ from tools.kargo_tools import kargo_takip
 from database.db import get_connection
 from database.briefing import build_briefing_json
 from database.daily_metrics import rollup_yesterday_all_tenants, refresh_forecasts_all_tenants
-from agent.llm_service import (
-    agenerate_daily_report,
-    agenerate_stock_alert_content,
-)
-from agent.tenant_config import get_tenant_by_id
-from repositories.tickets import create_ticket as repo_create_ticket
+from agent.llm_service import agenerate_daily_report
+from services.cargo_intervention import CARGO_DELAY_STATUSES, create_cargo_delay_ticket_for_order
+from services.stock_intervention import ensure_stock_alert_ticket
 
 
 def _active_tenant_ids() -> list[int]:
@@ -51,33 +48,6 @@ def _add_notification(tip: str, baslik: str, icerik: str, oncelik: str = "normal
     if len(notification_queue) > 50:
         notification_queue.pop(0)
     print(f"[BİLDİRİM][{oncelik.upper()}] {baslik}: {icerik[:150]}")
-
-
-def _create_ticket_in_db(
-    type_: str,
-    title: str,
-    description: str,
-    llm_content: str = None,
-    priority: str = "normal",
-    related_order_id: int = None,
-    related_product_id: int = None,
-    tenant_id: int = 1,
-    dedupe_key: dict | None = None,
-) -> int:
-    """Repository üzerinden bilet yazar; notifier otomatik tetiklenir."""
-    return repo_create_ticket(
-        payload={
-            "type": type_,
-            "title": title,
-            "description": description,
-            "llm_content": llm_content,
-            "priority": priority,
-            "related_order_id": related_order_id,
-            "related_product_id": related_product_id,
-        },
-        tenant_id=tenant_id,
-        dedupe_key=dedupe_key,
-    )
 
 
 def _save_daily_report(report_text: str, raw_data: dict, tenant_id: int) -> int:
@@ -195,53 +165,19 @@ async def _stok_alarm_for_tenant(tenant_id: int):
             return
 
         for urun in urunler:
-            llm_data = await agenerate_stock_alert_content(urun)
-            llm_json = json.dumps(llm_data, ensure_ascii=False)
-
-            # Dedupe: aynı ürün için bugün açık bilet var mı?
-            ticket_id = _create_ticket_in_db(
-                type_="stock_alert",
-                title=f"Kritik Stok: {urun['name']} ({urun['stock_quantity']} adet)",
-                description=(
-                    f"Urun '{urun['name']}' stok seviyesi kritik esigi altinda. "
-                    f"Mevcut: {urun['stock_quantity']} adet, Esik: {urun['low_stock_threshold']} adet."
-                ),
-                llm_content=llm_json,
-                tenant_id=tenant_id,
-                dedupe_key={"type": "stock_alert", "related_product_id": urun["id"]},
-                priority="high",
-                related_product_id=urun["id"],
-            )
-
+            urun_full = {**urun, "is_active": 1}
+            ticket_id = await ensure_stock_alert_ticket(urun_full, tenant_id)
+            if ticket_id is None:
+                continue
             _add_notification(
                 "alarm",
                 f"Stok Bileti Oluşturuldu: {urun['name']}",
-                f"Bilet #{ticket_id} — Önerilen sipariş: {llm_data.get('onerilen_miktar', '?')} adet",
+                f"Bilet #{ticket_id} — stok kritik",
                 "yuksek",
             )
 
     except Exception as e:
         print(f"[HATA] Stok alarm hatası: {e}")
-
-
-def _cargo_delay_template(order_info: dict) -> dict:
-    name = order_info.get("customer_name", "Müşteri")
-    code = order_info.get("cargo_tracking_code", "")
-    status = order_info.get("cargo_status", "Gecikti")
-    delivery = order_info.get("estimated_delivery") or "yakın zamanda"
-    musteri_mesaji = (
-        f"Sayın {name},\n\n"
-        f"{code} takip numaralı siparişinizde kargo sürecinde gecikme yaşanmaktadır. "
-        f"Güncel durum: {status}. Tahmini teslimat: {delivery}.\n\n"
-        f"Gecikmeden dolayı özür dileriz. Kargo durumunuzu {code} koduyla takip edebilirsiniz. "
-        f"Herhangi bir sorunuz için müşteri hizmetlerimize ulaşabilirsiniz.\n\n"
-        f"Saygılarımızla,\nMüşteri Hizmetleri"
-    )
-    ic_not = (
-        f"Sipariş #{order_info.get('id')} — Kargo: {code} — "
-        f"Durum: {status} — Müşteri: {name} ({order_info.get('customer_phone', '-')})"
-    )
-    return {"musteri_mesaji": musteri_mesaji, "ic_not": ic_not}
 
 
 # ---------------------------------------------------------------------------
@@ -269,33 +205,17 @@ async def _kargo_gecikme_for_tenant(tenant_id: int):
     for row in kargodakiler:
         kargo_bilgi = kargo_takip.invoke({"kargo_kodu": row["cargo_tracking_code"]})
         durum = kargo_bilgi.get("guncel_durum", "")
-        if durum not in ("Şubede Bekliyor", "Gecikti", "İade Sürecinde"):
+        if durum not in CARGO_DELAY_STATUSES:
             continue
 
-        order_info = {
-            "id": row["id"],
-            "customer_name": row["customer_name"],
-            "customer_phone": row["customer_phone"],
-            "cargo_tracking_code": row["cargo_tracking_code"],
-            "cargo_status": durum,
-            "estimated_delivery": kargo_bilgi.get("tahmini_teslimat"),
-            "total_price": row["total_price"],
-        }
-        llm_data = _cargo_delay_template(order_info)
-        llm_json = json.dumps(llm_data, ensure_ascii=False)
-
-        ticket_id = _create_ticket_in_db(
-            type_="cargo_delay",
-            title=f"Kargo Gecikmesi — Siparis #{row['id']} ({row['customer_name']})",
-            description=(
-                f"Siparis #{row['id']} ({row['customer_name']}) kargo durumu: '{durum}'. "
-                f"Kargo kodu: {row['cargo_tracking_code']}."
-            ),
-            llm_content=llm_json,
-            priority="high",
-            related_order_id=row["id"],
+        ticket_id = create_cargo_delay_ticket_for_order(
+            order_id=row["id"],
+            customer_name=row["customer_name"],
+            customer_phone=row["customer_phone"],
+            cargo_tracking_code=row["cargo_tracking_code"],
+            cargo_status=durum,
+            estimated_delivery=kargo_bilgi.get("tahmini_teslimat"),
             tenant_id=tenant_id,
-            dedupe_key={"type": "cargo_delay", "related_order_id": row["id"]},
         )
         _add_notification(
             "alarm",

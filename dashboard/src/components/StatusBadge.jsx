@@ -19,18 +19,18 @@ export const TICKET_STATUS = {
 }
 
 export const TICKET_TYPE = {
-  'cargo_delay':          { label: '🚚 Kargo Gecikmesi',  cls: 'badge-yellow' },
-  'stock_alert':          { label: '📦 Stok Uyarısı',     cls: 'badge-purple' },
-  'cancellation_request': { label: '❌ İptal Talebi',      cls: 'badge-red'    },
-  'complaint':            { label: '⚠️ Şikayet',           cls: 'badge-yellow' },
-  'refund_request':       { label: '💰 İade Talebi',       cls: 'badge-blue'   },
-  'anomaly':              { label: '🔍 Anomali',            cls: 'badge-purple' },
+  'cargo_delay':          { label: 'Kargo Gecikmesi',  cls: 'badge-yellow' },
+  'stock_alert':          { label: 'Stok Uyarısı',     cls: 'badge-purple' },
+  'cancellation_request': { label: 'İptal Talebi',      cls: 'badge-red'    },
+  'complaint':            { label: 'Şikayet',           cls: 'badge-yellow' },
+  'refund_request':       { label: 'İade Talebi',       cls: 'badge-blue'   },
+  'anomaly':              { label: 'Anomali',            cls: 'badge-purple' },
   'other':                { label: 'Diğer',                cls: 'badge-gray'   },
 }
 
 export const TICKET_PRIORITY = {
-  'critical': { label: '🔴 Kritik',  cls: 'badge-red'    },
-  'high':     { label: '🟠 Yüksek',  cls: 'badge-yellow' },
-  'normal':   { label: '🔵 Normal',  cls: 'badge-blue'   },
-  'low':      { label: '⚪ Düşük',   cls: 'badge-gray'   },
+  'critical': { label: 'Kritik',  cls: 'badge-red'    },
+  'high':     { label: 'Yüksek',  cls: 'badge-yellow' },
+  'normal':   { label: 'Normal',  cls: 'badge-blue'   },
+  'low':      { label: 'Düşük',   cls: 'badge-gray'   },
 }

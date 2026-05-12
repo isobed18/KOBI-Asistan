@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createProduct, deleteProduct, getProducts, patchProduct } from '../api.js'
 import SortableTh from '../components/SortableTh.jsx'
+import ListPagination from '../components/ListPagination.jsx'
+import { IconEmptyFolder, IconTabAlert, IconTabCheckCircle } from '../components/DataListIcons.jsx'
 import { cmpNullableStr, cmpNum } from '../utils/tableSort.js'
+
+const PAGE_SIZE = 20
 
 function stockStatusRank(p) {
   if (p.stock_quantity === 0) return 0
@@ -315,6 +319,7 @@ export default function Inventory() {
   const [deleteAsk, setDeleteAsk] = useState(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [holdRowId, setHoldRowId] = useState(null)
+  const [page, setPage] = useState(0)
   const longPressTimerRef = useRef(null)
   const longPressProductRef = useRef(null)
 
@@ -420,6 +425,20 @@ export default function Inventory() {
     return rows
   }, [filtered, sortKey, sortDir])
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE) || 1)
+  const pageRows = useMemo(
+    () => sorted.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [sorted, page],
+  )
+
+  useEffect(() => {
+    setPage(0)
+  }, [tab, search, sortKey, sortDir])
+
+  useEffect(() => {
+    if (page >= totalPages) setPage(Math.max(0, totalPages - 1))
+  }, [page, totalPages])
+
   const criticalCount = products.filter(p => p.is_low_stock).length
 
   const rowPointerDown = (p) => (e) => {
@@ -492,18 +511,35 @@ export default function Inventory() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card data-list-card">
         <div className="tab-bar">
-          <button className={`tab-btn${tab === 'all' ? ' active' : ''}`} onClick={() => setTab('all')}>
+          <button type="button" className={`tab-btn${tab === 'all' ? ' active' : ''}`} onClick={() => setTab('all')}>
             Tümü ({products.length})
           </button>
-          <button className={`tab-btn${tab === 'critical' ? ' active' : ''}`} onClick={() => setTab('critical')}>
-            ⚠️ Kritik ({criticalCount})
+          <button type="button" className={`tab-btn${tab === 'critical' ? ' active' : ''}`} onClick={() => setTab('critical')}>
+            <span className="tab-btn-icon" aria-hidden>
+              <IconTabAlert />
+            </span>
+            Kritik ({criticalCount})
           </button>
-          <button className={`tab-btn${tab === 'ok' ? ' active' : ''}`} onClick={() => setTab('ok')}>
-            ✅ Yeterli ({products.length - criticalCount})
+          <button type="button" className={`tab-btn${tab === 'ok' ? ' active' : ''}`} onClick={() => setTab('ok')}>
+            <span className="tab-btn-icon" aria-hidden>
+              <IconTabCheckCircle />
+            </span>
+            Yeterli ({products.length - criticalCount})
           </button>
         </div>
+
+        {!loading && !error && sorted.length > 0 && (
+          <ListPagination
+            page={page}
+            totalPages={totalPages}
+            total={sorted.length}
+            loading={loading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+          />
+        )}
 
         {loading ? (
           <div className="spinner" />
@@ -511,7 +547,9 @@ export default function Inventory() {
           <div className="error-msg">⚠️ {error}</div>
         ) : sorted.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🗂️</div>
+            <div className="empty-icon empty-icon--svg" aria-hidden>
+              <IconEmptyFolder />
+            </div>
             Ürün bulunamadı
           </div>
         ) : (
@@ -532,12 +570,13 @@ export default function Inventory() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map(p => (
+                {pageRows.map(p => (
                   <tr
                     key={p.id}
                     className={[
                       savingId === p.id ? 'row-saving' : '',
                       holdRowId === p.id ? 'inventory-row-holding' : '',
+                      p.is_low_stock || p.stock_quantity === 0 ? 'data-table-row--risk' : '',
                     ].filter(Boolean).join(' ')}
                     title="Düzenleme: hücreye çift tıklayın · Pasife alma: satıra basılı tutun"
                     onPointerDown={rowPointerDown(p)}
@@ -682,6 +721,17 @@ export default function Inventory() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && !error && sorted.length > 0 && (
+          <ListPagination
+            footer
+            page={page}
+            totalPages={totalPages}
+            total={sorted.length}
+            loading={loading}
+            onPrev={() => setPage(p => Math.max(0, p - 1))}
+            onNext={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+          />
         )}
       </div>
     </>

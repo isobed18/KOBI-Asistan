@@ -317,6 +317,72 @@ th.th-sort-active .th-sort-hint { opacity: .95; }
   letter-spacing: 0.01em;
 }
 
+/* Birleşik veri tabloları: gövde tipografisi + satır vurgusu */
+.data-list-card .inventory-table tbody td {
+  font-size: 13px;
+}
+.data-list-card .inventory-table tbody tr.data-table-row--risk td {
+  background: rgba(239, 68, 68, 0.04);
+}
+.data-list-card .inventory-table tbody tr.data-table-row--warn td {
+  background: rgba(245, 158, 11, 0.06);
+}
+.data-list-card .inventory-table tbody tr.data-table-row--success td {
+  background: rgba(34, 197, 94, 0.05);
+}
+.data-list-card .inventory-table tbody tr.data-table-row--info td {
+  background: rgba(59, 130, 246, 0.05);
+}
+.data-list-card .inventory-table tbody tr.data-table-row--risk:hover td,
+.data-list-card .inventory-table tbody tr.data-table-row--warn:hover td,
+.data-list-card .inventory-table tbody tr.data-table-row--success:hover td,
+.data-list-card .inventory-table tbody tr.data-table-row--info:hover td {
+  background: rgba(51, 65, 85, 0.35);
+}
+
+.tab-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  vertical-align: middle;
+  color: var(--text2);
+}
+.tab-btn.active .tab-btn-icon {
+  color: var(--accent);
+}
+
+/* Kargo durum noktası: gecikme kırmızı */
+.dot.dot-delayed {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 25%, transparent);
+}
+.dot.dot-ontime {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 22%, transparent);
+}
+
+.empty-icon--svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+  opacity: 0.85;
+}
+.empty-icon--svg svg {
+  display: block;
+}
+
 /* ---- Badges ---- */
 .badge {
   display: inline-flex;
@@ -512,23 +578,113 @@ select option { background: var(--surface); }
 .stock-bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
 .stock-pct { font-size: 11px; color: var(--text3); min-width: 32px; text-align: right; }
 
+/* Müdahale (tickets) page */
+.tickets-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tickets-hero-card {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 5%, var(--surface)) 0%,
+    var(--surface) 50%,
+    color-mix(in srgb, var(--surface2) 40%, var(--surface)) 100%
+  );
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+.tickets-hero-lead {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.55;
+  max-width: 52rem;
+}
+.tickets-panel-card { padding-bottom: 18px; }
+.tickets-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.tickets-tab-bar {
+  flex: 1;
+  min-width: min(100%, 320px);
+  margin-bottom: 0;
+}
+.tickets-type-filter {
+  margin-bottom: 0;
+  min-width: 11rem;
+}
+.tickets-type-filter select {
+  min-width: 11rem;
+}
+
 /* Ticket card */
-.ticket-list { display: flex; flex-direction: column; gap: 10px; }
+.ticket-list { display: flex; flex-direction: column; gap: 14px; }
 .ticket-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 18px 18px 16px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ticket-card--modern {
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--surface2) 55%, var(--surface)) 0%,
+    var(--surface) 40%,
+    var(--surface) 100%
+  );
+  padding: 16px 18px 14px;
+}
+.ticket-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--text) 6%, transparent);
 }
 .ticket-card.priority-critical { border-left: 3px solid var(--danger); }
 .ticket-card.priority-high     { border-left: 3px solid var(--warning); }
 .ticket-card.priority-normal   { border-left: 3px solid var(--accent); }
 .ticket-card.priority-low      { border-left: 3px solid var(--text3); }
 
-.ticket-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
-.ticket-title  { font-size: 14px; font-weight: 600; flex: 1; }
-.ticket-meta   { font-size: 11px; color: var(--text3); margin-bottom: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
-.ticket-desc   { font-size: 13px; color: var(--text2); margin-bottom: 8px; }
+.ticket-card-top { margin-bottom: 10px; }
+.ticket-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.ticket-title  { font-size: 15px; font-weight: 650; margin: 0; letter-spacing: -0.02em; line-height: 1.35; color: var(--text); }
+.ticket-meta   { font-size: 13px; color: var(--text3); margin-bottom: 8px; display: flex; gap: 12px; flex-wrap: wrap; }
+.ticket-meta--icons { gap: 14px; row-gap: 8px; }
+.ticket-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ticket-meta-item--success { color: var(--success); }
+.ticket-meta-icon {
+  display: inline-flex;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+.ticket-meta-item--success .ticket-meta-icon { color: var(--success); }
+.ticket-desc   { font-size: 13px; color: var(--text2); margin-bottom: 10px; line-height: 1.5; }
+.ticket-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.ticket-ai-toggle .ticket-btn-icon { margin-right: 6px; }
+.ticket-actions .btn { display: inline-flex; align-items: center; }
+.ticket-tab-icon--open { color: var(--danger); }
+.ticket-tab-icon--progress { color: var(--warning); }
+.ticket-tab-icon--resolved { color: var(--success); }
 .ticket-llm    {
   background: rgba(59,130,246,.06);
   border: 1px solid rgba(59,130,246,.2);
@@ -539,7 +695,7 @@ select option { background: var(--surface); }
   white-space: pre-wrap;
   margin-bottom: 10px;
 }
-.ticket-actions { display: flex; gap: 8px; }
+.ticket-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Reports page */
 .reports-hero-card {

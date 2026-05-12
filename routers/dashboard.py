@@ -4,7 +4,7 @@ Dashboard Router — Yönetici Paneli için Toplu KPI Verisi
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import asyncio
 import json
 import time
@@ -18,6 +18,7 @@ from database.schemas import CargoShipmentCreate, CargoShipmentPatch
 from agent.tenant_config import tenant_public_payload
 from repositories.orders import deduct_stock_on_order_created, delete_order_and_restore_stock
 from routers.auth_router import CurrentUser, get_current_user
+from services.cargo_intervention import CARGO_DELAY_STATUSES, create_cargo_delay_ticket_for_order
 
 # ---------------------------------------------------------------------------
 # AI Tasks cache (15 dakika TTL)
@@ -27,6 +28,32 @@ _ai_tasks_ts: float = 0
 _AI_TASKS_TTL = 900  # 15 dakika
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+
+def _parse_estimated_delivery_date(val) -> date | None:
+    """SQLite cargo_tracking.estimated_delivery: date veya datetime string."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        try:
+            y, m, d = int(s[0:4]), int(s[5:7]), int(s[8:10])
+            return date(y, m, d)
+        except ValueError:
+            pass
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _is_delayed_by_eta(estimated_delivery) -> bool:
+    d = _parse_estimated_delivery_date(estimated_delivery)
+    if d is None:
+        return False
+    return d < date.today()
 
 
 class CargoDelayBildirRequest(BaseModel):
@@ -386,12 +413,10 @@ def get_cargo_dashboard(current_user: CurrentUser = Depends(get_current_user)):
         ORDER BY o.updated_at DESC
     """, (tenant_id,)).fetchall()
 
-    DELAY_STATUSES = {"Şubede Bekliyor", "Gecikti", "İade Sürecinde"}
-
     result = []
     for r in rows:
         d = dict(r)
-        d["is_delayed"] = d.get("cargo_status") in DELAY_STATUSES
+        d["is_delayed"] = _is_delayed_by_eta(d.get("estimated_delivery"))
         result.append(d)
 
     conn.close()
@@ -594,6 +619,7 @@ def patch_cargo_shipment(
     if not body.model_dump(exclude_unset=True):
         raise HTTPException(status_code=400, detail="Guncellenecek alan yok.")
 
+    new_delay_status: str | None = None
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -681,11 +707,46 @@ def patch_cargo_shipment(
                 )
 
         conn.commit()
+        if body.cargo_status is not None:
+            st = (body.cargo_status or "").strip() or "—"
+            if st in CARGO_DELAY_STATUSES:
+                new_delay_status = st
     except HTTPException:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+    if new_delay_status is not None:
+        c2 = get_connection()
+        try:
+            o = c2.execute(
+                """
+                SELECT id, customer_name, customer_phone, cargo_tracking_code
+                FROM orders
+                WHERE id = ? AND tenant_id = ? AND status = 'kargoda'
+                """,
+                (order_id, tenant_id),
+            ).fetchone()
+            if o and (o["cargo_tracking_code"] or "").strip():
+                code = (o["cargo_tracking_code"] or "").strip()
+                est_row = c2.execute(
+                    "SELECT estimated_delivery FROM cargo_tracking WHERE tracking_code = ?",
+                    (code,),
+                ).fetchone()
+                est = est_row["estimated_delivery"] if est_row else None
+                create_cargo_delay_ticket_for_order(
+                    order_id=int(o["id"]),
+                    customer_name=o["customer_name"],
+                    customer_phone=o["customer_phone"],
+                    cargo_tracking_code=code,
+                    cargo_status=new_delay_status,
+                    estimated_delivery=est,
+                    tenant_id=tenant_id,
+                )
+        finally:
+            c2.close()
+
     return {"ok": True}
 
 

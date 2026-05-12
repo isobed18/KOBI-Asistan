@@ -126,7 +126,7 @@ const NAV = [
 const PAGE_TITLES = {
   '/':          { title: '', sub: '' },
   '/assistant': { title: 'AI Asistan', sub: '' },
-  '/tickets':   { title: 'Müdahale', sub: 'İnsan onayı bekleyen konular' },
+  '/tickets':   { title: 'Müdahale', sub: '' },
   '/orders':    { title: 'Siparişler', sub: '' },
   '/inventory': { title: 'Stoklar', sub: '' },
   '/cargo':     { title: 'Kargolar', sub: '' },
