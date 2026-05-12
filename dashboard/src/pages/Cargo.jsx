@@ -810,11 +810,6 @@ export default function Cargo() {
                     <td>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <StatusDot delayed={s.is_delayed} />
-                        {s.is_delayed && (
-                          <span className="badge badge-gray" title="Müdahale kaydı kargo durumu kaydedildiğinde otomatik oluşur">
-                            Otomatik müdahale
-                          </span>
-                        )}
                       </span>
                     </td>
                   </tr>
