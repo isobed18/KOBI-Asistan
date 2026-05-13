@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     USE_EMBEDDING_CLASSIFIER: bool = False   # sentence-transformers ağır; demo'da False bırak
 
     # Visual stock ingestion / image search
-    FASHION_CLIP_MODEL: str = "Marqo/marqo-fashionCLIP"
+    FASHION_CLIP_MODEL: str = "hf-hub:Marqo/marqo-fashionCLIP"
     GENERAL_CLIP_MODEL: str = "sentence-transformers/clip-ViT-B-32"
 
     # JWT Auth

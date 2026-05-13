@@ -18,6 +18,46 @@ from config import settings
 ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_ROOT = ROOT / "static" / "uploads" / "visual-stock"
 
+FASHION_ZERO_SHOT_LABELS = [
+    "a day dress",
+    "an evening dress",
+    "a t-shirt",
+    "a shirt",
+    "a blouse",
+    "a sweater",
+    "a jacket",
+    "a coat",
+    "jeans",
+    "pants",
+    "a skirt",
+    "shorts",
+    "shoes",
+    "boots",
+    "a handbag",
+    "a hat",
+    "jewelry",
+]
+
+FASHION_LABEL_TO_CATEGORY = {
+    "a day dress": "Dress",
+    "an evening dress": "Dress",
+    "a t-shirt": "Top",
+    "a shirt": "Top",
+    "a blouse": "Top",
+    "a sweater": "Knitwear",
+    "a jacket": "Outerwear",
+    "a coat": "Outerwear",
+    "jeans": "Bottom",
+    "pants": "Bottom",
+    "a skirt": "Bottom",
+    "shorts": "Bottom",
+    "shoes": "Shoes",
+    "boots": "Shoes",
+    "a handbag": "Bag",
+    "a hat": "Accessory",
+    "jewelry": "Accessory",
+}
+
 BUSINESS_MODEL_HINTS = {
     "giyim": {
         "clip_model_setting": "FASHION_CLIP_MODEL",
@@ -80,6 +120,10 @@ def _title_from_tokens(tokens: Iterable[str], fallback: str = "Yeni Urun") -> st
     return " ".join(w.capitalize() for w in words[:4])
 
 
+def _title_from_label(label: str) -> str:
+    return label.replace(" a ", " ").replace("an ", "").replace("a ", "").strip().title()
+
+
 def _business_hint(business_type: str | None) -> dict:
     return BUSINESS_MODEL_HINTS.get((business_type or "").lower(), BUSINESS_MODEL_HINTS["giyim"])
 
@@ -93,26 +137,135 @@ def _model_from_hint(hint: dict) -> tuple[str, str | None]:
 
 @lru_cache(maxsize=4)
 def _load_clip_model(model_name: str):
+    if model_name.startswith("hf-hub:") or "fashionSigLIP" in model_name:
+        try:
+            import open_clip
+            import torch
+
+            resolved = model_name if model_name.startswith("hf-hub:") else f"hf-hub:{model_name}"
+            model, _, preprocess = open_clip.create_model_and_transforms(resolved)
+            tokenizer = open_clip.get_tokenizer(resolved)
+            model.eval()
+            return {
+                "kind": "open_clip",
+                "model": model,
+                "preprocess": preprocess,
+                "tokenizer": tokenizer,
+                "torch": torch,
+            }
+        except Exception:
+            return None
+    if "marqo-fashionclip" in model_name.lower():
+        try:
+            import torch
+            from transformers import AutoModel, AutoProcessor
+
+            model = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+            processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+            model.eval()
+            return {
+                "kind": "marqo_fashionclip",
+                "model": model,
+                "processor": processor,
+                "torch": torch,
+            }
+        except Exception:
+            try:
+                import open_clip
+                import torch
+
+                resolved = model_name if model_name.startswith("hf-hub:") else f"hf-hub:{model_name}"
+                model, _, preprocess = open_clip.create_model_and_transforms(resolved)
+                tokenizer = open_clip.get_tokenizer(resolved)
+                model.eval()
+                return {
+                    "kind": "open_clip",
+                    "model": model,
+                    "preprocess": preprocess,
+                    "tokenizer": tokenizer,
+                    "torch": torch,
+                }
+            except Exception:
+                return None
     try:
         from sentence_transformers import SentenceTransformer
 
-        return SentenceTransformer(model_name)
+        return {"kind": "sentence_transformer", "model": SentenceTransformer(model_name)}
     except Exception:
         return None
 
 
 def _encode_image(image_path: str, model_name: str) -> list[float] | None:
-    model = _load_clip_model(model_name)
-    if model is None:
+    loaded = _load_clip_model(model_name)
+    if loaded is None:
         return None
     try:
         from PIL import Image
 
         image = Image.open(image_path).convert("RGB")
+        if loaded["kind"] == "marqo_fashionclip":
+            torch = loaded["torch"]
+            processed = loaded["processor"](images=[image], return_tensors="pt")
+            with torch.no_grad():
+                emb = loaded["model"].get_image_features(processed["pixel_values"], normalize=True)
+            return [float(x) for x in emb[0].detach().cpu().tolist()]
+        if loaded["kind"] == "open_clip":
+            torch = loaded["torch"]
+            tensor = loaded["preprocess"](image).unsqueeze(0)
+            with torch.no_grad():
+                emb = loaded["model"].encode_image(tensor)
+                emb = emb / emb.norm(dim=-1, keepdim=True)
+            return [float(x) for x in emb[0].detach().cpu().tolist()]
+        model = loaded["model"]
         emb = model.encode([image], normalize_embeddings=True)[0]
         return [float(x) for x in emb.tolist()]
     except Exception:
         return None
+
+
+def classify_image_against_labels(
+    image_path: str,
+    labels: list[str],
+    model_name: str | None = None,
+) -> dict:
+    """Zero-shot image classification with FashionSigLIP/open_clip when available."""
+    selected_model = model_name or settings.FASHION_CLIP_MODEL
+    loaded = _load_clip_model(selected_model)
+    if loaded is None or loaded.get("kind") not in {"open_clip", "marqo_fashionclip"}:
+        return {"model": selected_model, "available": False, "labels": labels, "scores": []}
+    try:
+        from PIL import Image
+
+        torch = loaded["torch"]
+        pil_image = Image.open(image_path).convert("RGB")
+        if loaded["kind"] == "marqo_fashionclip":
+            processed = loaded["processor"](
+                text=labels,
+                images=[pil_image],
+                padding="max_length",
+                return_tensors="pt",
+            )
+            with torch.no_grad():
+                image_features = loaded["model"].get_image_features(processed["pixel_values"], normalize=True)
+                text_features = loaded["model"].get_text_features(processed["input_ids"], normalize=True)
+                probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)[0]
+        else:
+            image = loaded["preprocess"](pil_image).unsqueeze(0)
+            text = loaded["tokenizer"](labels)
+            with torch.no_grad():
+                image_features = loaded["model"].encode_image(image)
+                text_features = loaded["model"].encode_text(text)
+                image_features /= image_features.norm(dim=-1, keepdim=True)
+                text_features /= text_features.norm(dim=-1, keepdim=True)
+                probs = (100.0 * image_features @ text_features.T).softmax(dim=-1)[0]
+        ranked = sorted(
+            [{"label": label, "score": float(score)} for label, score in zip(labels, probs.detach().cpu().tolist())],
+            key=lambda x: x["score"],
+            reverse=True,
+        )
+        return {"model": selected_model, "available": True, "labels": labels, "scores": ranked}
+    except Exception as exc:
+        return {"model": selected_model, "available": False, "labels": labels, "scores": [], "error": str(exc)}
 
 
 def _encode_image_with_fallback(
@@ -174,6 +327,27 @@ def classify_image_draft(filename: str, image_path: str, business_type: str | No
     if embedding is not None:
         classifier = f"clip:{used_model}"
         confidence = max(confidence, 0.72)
+    if (business_type or "").lower() == "giyim":
+        zero_shot = classify_image_against_labels(image_path, FASHION_ZERO_SHOT_LABELS, primary_model)
+        if zero_shot.get("available") and zero_shot.get("scores"):
+            top = zero_shot["scores"][0]
+            top_label = top["label"]
+            top_score = float(top["score"])
+            category = FASHION_LABEL_TO_CATEGORY.get(top_label, category)
+            if suggested_name == "Yeni Gorsel Urun" or not tokens:
+                suggested_name = _title_from_label(top_label)
+            keywords = " ".join(
+                dict.fromkeys(
+                    [
+                        *tokens,
+                        *matched_keywords,
+                        *top_label.replace("-", " ").split(),
+                        *[s["label"] for s in zero_shot["scores"][:3]],
+                    ]
+                )
+            )
+            classifier = f"fashion_zero_shot:{zero_shot['model']}"
+            confidence = max(confidence, top_score)
     return CandidateDraft(
         suggested_name=suggested_name,
         suggested_category=category,

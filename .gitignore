@@ -12,4 +12,6 @@ build/
 Thumbs.db
 .claude/
 static/dashboard/
+static/uploads/
+demo_assets/
 package-lock.json

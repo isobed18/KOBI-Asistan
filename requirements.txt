@@ -14,6 +14,9 @@ langchain-ollama>=0.3          # Ollama (local)
 langchain-google-genai>=2.0    # Google Gemini
 sentence-transformers>=3.0     # Optional local embeddings for intent similarity
 Pillow>=10.0                   # Optional image loading for CLIP visual ingestion
+transformers>=4.45             # Optional Marqo FashionCLIP model loader
+open_clip_torch>=2.26          # Optional FashionSigLIP / CLIP image embeddings
+datasets>=2.20                 # Optional HF demo dataset loader (Marqo/polyvore)
 
 # Scheduler
 apscheduler>=3.10

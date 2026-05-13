@@ -34,17 +34,33 @@ siyah-oversize-tshirt.png
 kirmizi-gul-buket.jpeg
 ```
 
-### 2. CLIP modu
+### 2. CLIP / FashionCLIP modu
 
-`sentence-transformers` ve `Pillow` kuruluysa servis otomatik model yuklemeyi dener.
+`open_clip_torch`, `transformers`, `sentence-transformers` ve `Pillow` kuruluysa servis otomatik model yuklemeyi dener.
 
-Giyim / butik icin once:
+Giyim / butik icin varsayilan:
 
 ```text
-FASHION_CLIP_MODEL=Marqo/marqo-fashionCLIP
+FASHION_CLIP_MODEL=hf-hub:Marqo/marqo-fashionCLIP
 ```
 
-denenir. Yuklenemezse genel CLIP'e duser:
+Bu model OpenCLIP'in Hugging Face Hub loader'i ile yuklenir ve gorseli su tur Ingilizce etiketlere gore siniflandirir:
+
+```text
+a day dress, an evening dress, a t-shirt, a shirt, a blouse, a sweater,
+a jacket, a coat, jeans, pants, a skirt, shorts, shoes, boots, a handbag,
+a hat, jewelry
+```
+
+Istenirse env ile FashionSigLIP de kullanilabilir:
+
+```text
+FASHION_CLIP_MODEL=hf-hub:Marqo/marqo-fashionSigLIP
+```
+
+`FASHION_CLIP_MODEL=Marqo/marqo-fashionCLIP` verilirse servis once kullanicinin paylastigi `transformers AutoModel/AutoProcessor` yolunu dener; bu ortamda PyTorch meta tensor uyumsuzlugu olursa ayni modeli `hf-hub:` OpenCLIP yoluyla yukleyerek devam eder.
+
+Yuklenemezse genel CLIP'e duser:
 
 ```text
 GENERAL_CLIP_MODEL=sentence-transformers/clip-ViT-B-32
@@ -56,6 +72,30 @@ modelini yuklemeyi dener. Basarirsa image embedding uretir ve SQLite icinde
 Not:
 - FashionCLIP sadece `business_type=giyim` icin denenir.
 - Model indirilemez/yuklenemezse sistem demo fallback moduna duser ve akisi bozmaz.
+
+## Polyvore Demo Dataset
+
+Demo icin Hugging Face `Marqo/polyvore` dataset'i desteklenir. Dataset split'i `data`, satir semasi:
+
+```text
+image, category, text, item_ID
+```
+
+15 rastgele urun indirip gorsel stok adaylari olusturmak icin:
+
+```powershell
+python scripts\prepare_polyvore_demo.py --count 15 --business-type giyim
+```
+
+Bu komut gorselleri local olarak `demo_assets/polyvore` altina indirir, ardindan ayni gorselleri mevcut visual-stock batch akisiyle `static/uploads/visual-stock/...` altina kopyalar ve `visual_stock_candidates` tablosuna yazar.
+
+Urunleri direkt onaylayip katalog + embedding aramasina hazirlamak icin:
+
+```powershell
+python scripts\prepare_polyvore_demo.py --count 15 --business-type giyim --approve --price 899 --stock 12
+```
+
+`demo_assets/` git'e eklenmez; sadece lokal demo veri klasorudur.
 
 ## Eklenen DB Tablolari
 
