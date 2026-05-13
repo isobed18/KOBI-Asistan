@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from './components/Layout.jsx'
 import Overview  from './pages/Overview.jsx'
@@ -80,6 +81,12 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'light'
+    document.documentElement.setAttribute('data-theme', savedTheme)
+    if (!localStorage.getItem('theme')) localStorage.setItem('theme', savedTheme)
+  }, [])
+
   return (
     <AuthProvider>
       <AppRoutes />

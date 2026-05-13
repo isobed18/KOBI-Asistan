@@ -209,7 +209,7 @@ export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const page = PAGE_TITLES[location.pathname] || { title: '', sub: '' }
   const [openTickets, setOpenTickets] = useState(0)
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light')
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)

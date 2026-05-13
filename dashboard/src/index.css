@@ -1,26 +1,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #0f172a;
-  --surface:   #1e293b;
-  --surface2:  #334155;
-  --border:    #334155;
-  --accent:    #3b82f6;
-  --accent-h:  #2563eb;
-  --success:   #22c55e;
-  --warning:   #f59e0b;
-  --danger:    #ef4444;
-  --purple:    #a855f7;
-  --text:      #f1f5f9;
-  --text2:     #94a3b8;
-  --text3:     #64748b;
-  --radius:    8px;
-  --radius-lg: 12px;
-  --shadow:    0 4px 16px rgba(0,0,0,.35);
-  --chat-user-bg: #334155;
-}
-
-[data-theme="light"] {
   --bg:        #f6f3ee;
   --surface:   #fffdf8;
   --surface2:  #f0ebe2;
@@ -34,8 +14,28 @@
   --text:      #1f2937;
   --text2:     #64748b;
   --text3:     #94a3b8;
+  --radius:    8px;
+  --radius-lg: 12px;
   --shadow:    0 10px 30px rgba(31,41,55,.08);
   --chat-user-bg: #e8eaed;
+}
+
+[data-theme="dark"] {
+  --bg:        #0f172a;
+  --surface:   #1e293b;
+  --surface2:  #334155;
+  --border:    #334155;
+  --accent:    #3b82f6;
+  --accent-h:  #2563eb;
+  --success:   #22c55e;
+  --warning:   #f59e0b;
+  --danger:    #ef4444;
+  --purple:    #a855f7;
+  --text:      #f1f5f9;
+  --text2:     #94a3b8;
+  --text3:     #64748b;
+  --shadow:    0 4px 16px rgba(0,0,0,.35);
+  --chat-user-bg: #334155;
 }
 
 html, body, #root { height: 100%; }
@@ -2507,6 +2507,7 @@ select option { background: var(--surface); }
   background:
     radial-gradient(circle at 50% 8%, rgba(37,99,235,.14), transparent 26%),
     var(--bg);
+  position: relative;
 }
 .calm-login-card {
   max-width: 430px;
@@ -2542,6 +2543,12 @@ select option { background: var(--surface); }
   background: var(--text);
   border-color: var(--text);
   color: var(--bg);
+}
+.login-theme-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
 }
 @media (max-width: 1050px) {
   .guided-step-grid { grid-template-columns: 1fr; }
