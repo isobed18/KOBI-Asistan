@@ -2134,7 +2134,7 @@ select option { background: var(--surface); }
   gap: 18px;
   align-items: stretch;
 }
-/* Genel bakış: hazırlanıyor + geciken kargo yan yana */
+/* Genel bakış: iki sütun (kritik stok + iptaller; hazırlanıyor + geciken kargo) */
 .guided-preparing-cargo-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -2272,7 +2272,7 @@ select option { background: var(--surface); }
   line-height: 1.65;
   max-width: 720px;
 }
-/* ~3.2 satır görünür; fazlası dikey kaydırılır (satır yüksekliği + aralık) */
+/* ~2.2 satır görünür; fazlası dikey kaydırılır (satır yüksekliği + aralık) */
 .guided-stock-step .guided-stock-list {
   list-style: none;
   margin: 0 0 12px;
@@ -2282,7 +2282,7 @@ select option { background: var(--surface); }
   gap: 14px;
   --guided-stock-item-h: 102px;
   --guided-stock-gap: 14px;
-  max-height: calc(3.2 * var(--guided-stock-item-h) + 3 * var(--guided-stock-gap));
+  max-height: calc(2.2 * var(--guided-stock-item-h) + 2 * var(--guided-stock-gap));
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;

@@ -11,9 +11,7 @@ langchain-core>=0.3
 
 # LLM Providers (kullandiginiz provider'a gore yeterli)
 langchain-ollama>=0.3          # Ollama (local)
-langchain-openai>=0.3          # OpenAI
 langchain-google-genai>=2.0    # Google Gemini
-langchain-anthropic>=0.3       # Anthropic Claude
 sentence-transformers>=3.0     # Optional local embeddings for intent similarity
 
 # Scheduler

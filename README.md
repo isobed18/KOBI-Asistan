@@ -1,383 +1,176 @@
-# KOBI Asistan
+# KOBİ Asistan
 
-> v4.4 - Tenant-aware AI operations platform for small businesses.
-> FastAPI + LangGraph + React Dashboard + Telegram + SQLite.
+<p align="center">
+  <b>YZTA Hackathon</b> — KOBİ operasyonları için kiracı-bilinçli, AI destekli yönetim platformu
+</p>
 
-KOBI Asistan, kucuk isletmelerin siparis, stok, kargo, musteri iletisim ve insan onayi gerektiren operasyonlarini tek bir AI destekli akis altinda toplar. Hedef klasik bir yonetim paneli degil: isletmeci uygulamaya girdiginde "isimin buyuk kismi sistem tarafindan takip ediliyor, ben sadece kritik kararlara bakiyorum" hissini almalidir.
+<p align="center">
+  <a href="https://fastapi.tiangolo.com/" title="FastAPI"><img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
+  &nbsp;
+  <a href="https://github.com/langchain-ai/langgraph" title="LangGraph"><img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" alt="LangGraph" /></a>
+  &nbsp;
+  <a href="https://www.sqlite.org/" title="SQLite"><img src="https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" /></a>
+  &nbsp;
+  <a href="https://react.dev/" title="React"><img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" /></a>
+  &nbsp;
+  <a href="https://vitejs.dev/" title="Vite"><img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" /></a>
+  &nbsp;
+  <a href="https://core.telegram.org/bots/api" title="Telegram Bot API"><img src="https://img.shields.io/badge/Telegram-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram" /></a>
+  &nbsp;
+  <a href="https://apscheduler.readthedocs.io/" title="APScheduler"><img src="https://img.shields.io/badge/APScheduler-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="APScheduler" /></a>
+</p>
 
-## Guncel Durum
+---
 
-Bu branch'te proje artik dort ana katmanda calisiyor:
+## Bu proje ne yapar?
 
-- **Guided Dashboard**: Minimal React arayuzu, dark/light mode, Framer Motion gecisleri, gunluk ozet akisi, AI onerilen aksiyonlar, bildirimler ve admin AI asistan.
-- **Tenant-aware Agent Core**: Her isletme icin `tenants/{tenant_id}/config.yaml` ile personality, rules, branding, feature flag ve LLM ayarlari.
-- **Customer Automation**: Telegram/Web chat, prompt police, musteri auth scope, regex intent classifier, cache ve LangGraph agent.
-- **Operations Automation**: Stok hareketleri, siparis/kargo takibi, ticket sistemi, AI raporlar, scheduler ve yonetici bildirimleri.
+KOBİ Asistan; **sipariş**, **stok**, **kargo**, **raporlama** ve **insan onayı gereken müdahale kayıtlarını** tek çatı altında toplar. Amaç, işletmeciyi tablo yığınına boğmak değil; önce **bugün neye müdahale etmeniz gerektiğini** sade bir akışla göstermek, ardından isterseniz **doğal dille** veya **klasik panellerle** derine inmektir.
 
-## Ekran Goruntuleri
+## Ekran görüntüleri
 
-Mevcut demo ekranlari `docs/screenshots/` altindadir. Yeni guided dashboard tasarimi daha sade bir akisa tasindi; eski ekranlar hala ozellik kapsamini gostermek icin tutuluyor.
+### 1. Hoş geldin ekranı
 
-![Genel Bakis](docs/screenshots/genel_bakis.png)
-![Siparisler](docs/screenshots/siparisler.png)
-![Stok](docs/screenshots/stock.png)
-![Biletler](docs/screenshots/tickets.png)
-![AI Rapor](docs/screenshots/ai_rapor.png)
-![Telegram LLM Bypass](docs/screenshots/telegram_siparistakip_llmbypassed.png)
+![Hoş geldin — otomasyon merkezi girişi](images/Arayuz.png)
 
-## Mimari
+### 2. Günün özeti
+
+Bugünkü satış, kaç sipariş geldi, kaç paket hazırlanacak, kaç “acil sinyal” var hepsi bu ekranda gösterilir. Altında son günlerin cirosunu gösteren çizgi grafik bulunur. Yan tarafta ise **AI brifingi**: bugünü iki üç cümleyle özetleyen metin var isterseniz raporlar sayfasına linkten gidebilir ve daha detaylı bir rapor oluşturabilirsiniz.
+
+![Günün özeti — rakamlar, grafik ve kısa brifing](images/GununOzeti.png)
+
+### 3. Düşük stok ve bugünkü iptaller
+
+Bir sonraki bölüme ilerleyince **hangi ürünler kritik** ve **bugün iptal olan siparişler** listelenir; stoka veya siparişlere geçmek için ekrandaki bağlantıları kullanılır.
+
+![Kritik stok ve bugünkü iptaller](images/KritikStokVeIptal.png)
+
+### 4. Hazırlık kuyruğu ve geciken kargolar
+
+Bir sonraki bölümde yan yana **kargoya henüz verilmemiş** siparişler ile **geciken** kargolar gösterilir; paketlenecek kargolar ile müşteriye haber verilmesi gereken kargolar aynı ekranda toplanır.
+
+![Hazırlık kuyruğu ve geciken kargolar](images/HazirlikVeGecikenKargo.png)
+
+### 5. AI aksiyonları
+
+Kritik stok, açık müdahale kayıtları, bekleyen siparişler ve kargo gecikmeleri dört kutuda özetlenir; her birinde **İncele** veya **Ertele** kullanılabilir, alttaki bağlantılarla **AI Asistan** veya **Müdahale** sayfasına geçilebilir.
+
+![AI’nin önerdiği günlük aksiyonlar](images/AIAksiyonlari.png)
+
+### 6. AI Asistan — soru sorma
+
+Sol bölümde kritik stok, bekleyen sipariş, günlük özet ve açık müdahale için hazır hızlı sorgular bulunur; sağ bölümde doğal dil kullanılarak metinle soru yazılır. Stok veya siparişi değiştirecek işlemlerde önce özet çıkar, **Onayla** denmeden kayıt güncellenmez. Örnekte kritik stoktaki ürünler sorulmuş; cevap ürün listesi ve uyarı kutusuyla birlikte gelir.
+
+![AI Asistan — kritik stok sorusu ve cevap](images/AIAsistanKritikStok.png)
+
+### 7. AI Asistan — onay öncesi
+
+*"Nohut stoğunu 10 adet yap"* gibi bir istekte önce yapılacak değişiklik metin olarak gösterilir, ardından **Onayla** düğmeli kart açılır; böylece yanlışlıkla stok değişimi engellenir.
+
+![Stok değişikliği — onay bekleyen kart](images/AIAsistanStokOnay.png)
+
+### 8. AI Asistan — onay sonrası
+
+Onaydan sonra sohbette güncelleme mesajı ve yeşil **işlem tamam** özeti görünür; stok değişikliğinin uygulandığı bu ekrandan doğrulanır.
+
+![Stok güncellemesi başarılı](images/AIAsistanStokTamam.png)
+
+### 9. Stoklar
+
+Ürünler tabloda listelenir: üstte arama bölümü bulunur, **Tümü / Kritik / Yeterli** sekmeleri arasında geçiş yaparak filtreme yapılır. Tablodan veriler istendildiği gibi güncellenir.
+
+![Stoklar listesi ve filtreler](images/Stoklar.png)
+
+### 10. Siparişler
+
+Siparişler tabloda listelenir: üstte arama bölümü bulunur, **Tümü / Hazırlanıyor / Kargoda / Teslim / İptal** sekmeleri arasında geçiş yaparak filtreme yapılır. Tablodan veriler istendildiği gibi güncellenir; **Detay** ile tek sipariş teki ürünler gösterilir.
+
+![Siparişler — sekmeler ve liste](images/Siparisler.png)
+
+### 11. Kargolar
+
+Kargodaki siparişler tabloda listelenir: üstte arama bölümü bulunur, **Tümü / Gecikmeli / Sorunsuz** sekmeleri arasında geçiş yaparak filtreme yapılır. **Yeni kargo** ile kayıt eklenebilir; tablodan veriler istendildiği gibi güncellenir, kargo iade olduğunda stok iadesi yapılır.
+
+![Kargolar — arama, sekmeler, liste](images/Kargolar.png)
+
+### 12. Raporlar
+
+Solda geçmiş günler listelenir; seçilen tarihin **AI ile üretilmiş günlük özeti** sağda okunur, metin **Kopyala** ile panoya alınabilir. Sabahları otomatik rapor üretilir. Eğer istenirse **Rapor oluştur** ile anlık olarak da oluşturulabilir.
+
+![Raporlar — geçmiş ve seçili günün özeti](images/Raporlar.png)
+
+### 13. Müdahale edilmesi gerekenler
+
+Stok kritik durumdayken, kargo gecikmesi olduğunda ve müşterinin siparişi iptal edilmesi gibi durumlarda bu bölüme kayıt oluşturulur; **İşleme al**, **Çözüldü** ve gerektiğinde **Yeniden aç** ile durum takibi yapılır. 
+
+Müşteri **Telegram** üzerinden ürün listesine bakar, sepete ürün ekler ve siparişi tamamlamak için telefon numarasını ve adını girer; bot sipariş numarası verir ve siparişin **işletme sahibi panelden onaylanana kadar** kesinleşmediğini bildirir. Bu talep **Müdahale** ekranına düşer; KOBİ **Siparişi onayla** dediğinde sipariş oluşturulur ve stok düşer, **Reddet** seçilirse müşteriye Telegram üzerinden bilgi gider.
+
+İptal talebinde müşteri önce **sipariş numarasını** yazar; ardından güvenlik için bottan istenen **siparişte kayıtlı ad soyad** ile **kayıtlı cep telefonu** ayrı ayrı ve sipariş kaydıyla **birebir aynı** girilmelidir. Telefon veya isim siparişle eşleşmezse iptal talebi oluşturulmaz. Bu adımlardan sonra talep **Müdahale** kaydına düşer; KOBİ panelden **iptali onaylamadan** sipariş iptal edilmez ve stok değişmez. Onaylandığında sipariş iptal edilir ve **stoklar iade edilerek yeniden artırılır**.
+
+**Telegram üzerinden sipariş akışı**
+
+![Telegram — sepet, sipariş oluşturma ve iptal talebi](images/TelegramSiparis.gif)
+
+**Panelden Telegram siparişinin onaylanması**
+
+![Müdahale — Telegram siparişini panelden onaylama](images/SiparisOnaylama.gif)
+
+---
+
+## Mimari (özet)
 
 ```mermaid
-flowchart TD
-    A[React Dashboard] --> B[FastAPI]
-    C[Telegram / Web Chat] --> D[Channel Adapters]
-    D --> B
-    B --> E[Auth + Tenant Context]
-    E --> F[Intent Classifier + Cache]
-    F -->|simple query| G[Direct Tool Response]
-    F -->|complex query| H[LangGraph Customer Agent]
-    E --> I[LangGraph Admin Agent]
-    H --> J[Tools: orders, stock, cargo, tickets]
-    I --> J
-    J --> K[(SQLite kobi.db)]
-    L[APScheduler] --> M[Daily reports, stock alerts, cargo delay tickets]
-    M --> K
-    M --> N[Notifications]
-    N --> A
+flowchart LR
+  subgraph clients [İstemciler]
+    R[React Dashboard]
+    T[Telegram / Web Chat]
+  end
+  R --> API[FastAPI]
+  T --> API
+  API --> Auth[JWT + tenant]
+  Auth --> Ag[LangGraph ajanları]
+  Ag --> DB[(SQLite)]
+  Sch[APScheduler] --> DB
+  Sch --> Notif[Bildirimler]
+  Notif --> R
 ```
 
-### Tenant-aware yapi
+---
 
-`https://github.com/yerdaulet-damir/langgraph-sales-agent` reposu localde `C:\tmp\langgraph-sales-agent` altina clone edilip incelendi; repo proje icine eklenmedi ve git'e alinmadi. Oradan tam fork yerine su parcalar secilerek uyarlandi:
+## Hızlı başlangıç
 
-- YAML tabanli tenant config fikri.
-- Agent state icinde `tenant_id`, `channel`, `channel_user_id`.
-- Tenant-specific personality + rules prompt injection.
-- Channel adapter pattern.
-- Graph runtime config ile tenant gecirme yaklasimi.
+**Gereksinimler:** Python 3.10+, Node.js 18+, isteğe bağlı Ollama veya bulut LLM anahtarı.
 
-Bizdeki karsiliklar:
-
-- `tenants/default/config.yaml`
-- `agent/tenant_config.py`
-- `agent/tenant_context.py`
-- `agent/state.py`
-- `integrations/channels/base.py`
-- `integrations/channels/telegram_adapter.py`
-- `agent/graph.py`
-- `agent/admin_graph.py`
-
-## Ozellikler
-
-### Dashboard
-
-- JWT tabanli admin login (`/auth/login`, `/auth/me`).
-- Protected React routes.
-- Minimal guided overview:
-  - Hos geldiniz ekrani.
-  - Bugunun satis/ciro ozeti.
-  - Hazirlanmasi gereken siparisler.
-  - Onay bekleyen iptal ve riskli siparisler.
-  - AI onerilen aksiyonlar.
-- Dark/light mode.
-- Bildirim zili ve in-app notification listesi.
-- Admin AI Asistan sayfasi.
-- Siparis, stok, kargo, ticket ve rapor sayfalari.
-
-Varsayilan demo kullanici:
-
-```text
-username: admin
-password: admin123
-```
-
-Admin kullaniciyi olusturmak icin:
+**Backend** (depo kökü):
 
 ```bash
-python database/seed_users.py
-```
-
-### Customer chat / Telegram
-
-- Telegram bot icin menu ve button tabanli akis.
-- Channel adapter altyapisi: Telegram bugun, WhatsApp Business gelecekte ayni pattern ile eklenecek.
-- Rate limiting.
-- Prompt police.
-- Telefon veya takip kodu ile musteri scope dogrulama.
-- Basit sorgular icin LLM bypass:
-  - siparis sorgu
-  - kargo takip
-  - stok sorgu
-  - gunluk ozet
-  - kritik stok
-- Iptal, sikayet, ozel talep gibi durumlarda LangGraph agent calisir ve human review ticket acabilir.
-
-### Admin AI Assistant
-
-Isletmeci dashboard icinden dogal dil ile operasyon yaptirabilir:
-
-- "Ceviz ici 500 gramdan 12 tane stok ekle"
-- "Hazirlanan siparisleri kargoya al"
-- "Kritik stoklari listele"
-- "Bu urun icin stok hareketlerini goster"
-- "Bu bileti cozuldu yap"
-
-Admin tool katmani:
-
-- `admin_stok_guncelle`
-- `admin_toplu_stok_guncelle`
-- `admin_siparis_guncelle`
-- `admin_toplu_siparis_guncelle`
-- `admin_urun_ekle`
-- `admin_bilet_guncelle`
-
-Stok tool'lari urun adinda esnek arama yapar ve her degisiklik `stock_movements` tablosuna loglanir.
-
-### Ticket ve bildirimler
-
-- Human-in-the-loop ticket sistemi.
-- Kargo gecikmesi, kritik stok, iptal talebi ve manuel inceleme biletleri.
-- Kritik ticket olustugunda dashboard bildirimi.
-- Telegram yonetici bildirimi icin notifier altyapisi.
-- AI raporlar artik acik ticketlari ve cozulmesi gereken sorunlari da icerir.
-
-### Scheduler
-
-- Sabah raporu: gunluk KPI + acik ticketlar + aksiyon onerileri.
-- Kritik stok taramasi: urun basina gunluk dedupe ile ticket.
-- Kargo gecikme taramasi: siparis basina gunluk dedupe ile ticket.
-- Kargo gecikme musteri mesajlari template ile uretilir; LLM sadece yuksek degerli analizlerde kullanilir.
-
-## LLM Kullanim Politikasi
-
-| Senaryo | LLM | Not |
-|---|---:|---|
-| Basit siparis/stok/kargo sorgusu | Hayir | Regex intent classifier + direkt tool |
-| Tekrarlayan cevaplar | Hayir | Template/cache |
-| Iptal, sikayet, ozel talep | Evet | Agent + ticket |
-| Kritik stok tedarikci taslagi | Evet | Dusuk frekans, yuksek deger |
-| Gunluk isletme raporu | Evet | Scheduler veya dashboard |
-| AI task onerileri | Evet | JSON cikti + fallback template |
-
-## Kurulum ve Calistirma
-
-Backend:
-
-```bash
-cd D:\projects\kobi_asistan
 python -m venv venv
-venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
 python database/seed.py
 python database/seed_users.py
 uvicorn main:app --reload --port 8000
 ```
 
-Dashboard:
+**Dashboard:**
 
 ```bash
-cd D:\projects\kobi_asistan\dashboard
-npm install
-npm run dev
+cd dashboard && npm install && npm run dev
 ```
 
-Dashboard adresi:
+| Adres | Açıklama |
+|--------|----------|
+| http://localhost:5173 | Yönetici paneli |
+| http://localhost:8000/docs | OpenAPI |
+| http://localhost:8000/static/index.html | Basit web sohbet demosu |
 
-```text
-http://localhost:5173
-```
+**Demo giriş** (seed sonrası): kullanıcı `admin`, şifre `admin123`.
 
-Backend adresi:
+---
 
-```text
-http://localhost:8000
-```
+## Ortam değişkenleri
 
-Dashboard Vite proxy backend'i `localhost:8000` uzerinden bekler. `ECONNREFUSED /dashboard/stats` hatasi genelde FastAPI calismadiginda gorulur.
+`.env.example` dosyasını `.env` olarak kopyalayın. Özet:
 
-### Ortam degiskenleri
-
-```env
-LLM_PROVIDER=ollama
-OLLAMA_MODEL=qwen2.5:7b
-OLLAMA_BASE_URL=http://localhost:11434
-
-# Alternatifler
-# LLM_PROVIDER=openai
-# OPENAI_API_KEY=...
-# OPENAI_MODEL=gpt-4o-mini
-
-# LLM_PROVIDER=anthropic
-# ANTHROPIC_API_KEY=...
-
-# LLM_PROVIDER=gemini
-# GEMINI_API_KEY=...
-
-TELEGRAM_ENABLED=false
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_ADMIN_CHAT_ID=
-
-JWT_SECRET_KEY=change-me
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
-```
-
-## API Ozeti
-
-| Method | Endpoint | Aciklama |
-|---|---|---|
-| POST | `/auth/login` | Admin login |
-| GET | `/auth/me` | Aktif admin |
-| POST | `/api/v1/chat` | Musteri chat |
-| POST | `/api/v1/chat/stream` | Musteri chat SSE |
-| POST | `/api/v1/admin/chat` | Admin AI assistant |
-| GET | `/api/v1/notifications` | Dashboard bildirimleri |
-| PATCH | `/api/v1/notifications/{id}/read` | Bildirim okundu |
-| GET | `/dashboard/stats` | KPI ve dashboard ozet |
-| GET | `/dashboard/sales-chart` | Satis trendi |
-| GET | `/dashboard/analytics` | Urun/musteri/risk analitigi |
-| GET | `/dashboard/ai-tasks` | AI task onerileri |
-| GET | `/dashboard/cargo` | Kargo operasyon gorunumu |
-| GET/POST | `/tickets/` | Ticket liste/olustur |
-| PATCH | `/tickets/{id}/status` | Ticket durum guncelle |
-| GET/POST | `/reports/` | Rapor listeleme/uretme |
-| GET/PATCH | `/products/` | Urun ve stok yonetimi |
-| GET/PATCH | `/orders/` | Siparis yonetimi |
-
-## Proje Yapisi
-
-```text
-kobi_asistan/
-|-- main.py
-|-- config.py
-|-- agent/
-|   |-- graph.py
-|   |-- admin_graph.py
-|   |-- state.py
-|   |-- tenant_config.py
-|   |-- tenant_context.py
-|   |-- intent_classifier.py
-|   |-- llm_service.py
-|   |-- scheduler.py
-|   |-- auth.py
-|   `-- guard.py
-|-- tools/
-|   |-- order_product_tools.py
-|   |-- admin_tools.py
-|   `-- kargo_tools.py
-|-- routers/
-|   |-- auth_router.py
-|   |-- chat.py
-|   |-- admin_chat.py
-|   |-- dashboard.py
-|   |-- tickets.py
-|   |-- reports.py
-|   |-- orders.py
-|   `-- products.py
-|-- database/
-|   |-- db.py
-|   |-- schemas.py
-|   |-- seed.py
-|   `-- seed_users.py
-|-- integrations/
-|   |-- notifier.py
-|   |-- telegram_bot.py
-|   `-- channels/
-|-- tenants/
-|   `-- default/
-|       `-- config.yaml
-|-- dashboard/
-|   `-- src/
-|       |-- context/AuthContext.jsx
-|       |-- pages/Login.jsx
-|       |-- pages/Overview.jsx
-|       |-- pages/AdminAssistant.jsx
-|       `-- ...
-`-- docs/
-    |-- revive.md
-    |-- hackhaton_yarisma_tanimi.txt
-    `-- screenshots/
-```
-
-## Veritabani
-
-SQLite `kobi.db` icinde temel tablolar:
-
-- `products`
-- `orders`
-- `order_items`
-- `cargo_tracking`
-- `tickets`
-- `daily_reports`
-- `stock_movements`
-- `users`
-- `notifications`
-
-Kritik operasyon tablolarinda `tenant_id` alani eklenmistir. Bu su an tek tenant demo icin `default`/`1` olarak kullaniliyor; bir sonraki adim tenant switch ve tenant CRUD.
-
-## Oncelik Sirasi
-
-### 1. Auth guclendirme
-
-Admin JWT login var. Musteri tarafinda telefon/takip kodu scope dogrulamasi var. Ancak siparis iptali gibi geri donusu zor aksiyonlar icin OTP zorunlu hale getirilmeli:
-
-- Siparisteki gercek kisiye Telegram/WhatsApp/SMS/e-posta OTP.
-- OTP dogrulanmadan iptal ticket'i acilmamali.
-- OTP denemeleri rate limitlenmeli.
-- Kritik aksiyon audit log'a yazilmali.
-
-### 2. Gercek multi-tenant tamamlanmasi
-
-- Tenant switch UI.
-- Tenant create/update API.
-- Tenant bazli kullanici yetkileri.
-- Tenant bazli data isolation testleri.
-- `tenants/{tenant_id}/config.yaml` ile DB kayitlari arasinda net sozlesme.
-
-### 3. WhatsApp Business adapter
-
-- Telegram adapter pattern'i WhatsApp Business icin genislet.
-- Kritik ticket olusunca direkt ilgili chate yonetici bildirimi.
-- Musteri iptal/iadede OTP ve human review akisini WhatsApp thread'i uzerinden yurut.
-
-### 4. Repository pattern ve tool ayrimi
-
-Dis repodan ilham alinan repository pattern su an henuz tam uygulanmadi. Siradaki temizlik:
-
-- `repositories/base.py`
-- `repositories/orders.py`
-- `repositories/products.py`
-- `repositories/tickets.py`
-- Tool'lari domain bazli kucuk dosyalara bolme.
-
-### 5. FAQ / RAG
-
-- Iade kosullari, kargo sureleri, odeme, garanti gibi sik sorular icin statik fallback.
-- Sonra ChromaDB veya hafif embedding store.
-- Basit FAQ cevaplari LLM'siz donmeli.
-
-### 6. Tedarikci e-posta ve export
-
-- Stok ticket'inda uretilen e-posta taslagini SMTP ile gonderme.
-- PDF/Excel rapor export.
-- Haftalik/aylik analitik rapor.
-
-### 7. Production hardening
-
-- httpOnly cookie auth.
-- PostgreSQL migration.
-- Alembic migration sistemi.
-- LangSmith tracing.
-- Centralized logging.
-- Deployment dokumantasyonu.
-
-## Test / Dogrulama Notlari
-
-Bu branch'te daha once su kontroller yapildi:
-
-- FastAPI `/dashboard/stats` calisti.
-- Intent classifier basit siparis/stok sorgularinda LLM bypass etti.
-- React dashboard build ve browser smoke testleri calisti.
-- Guided dashboard login ve ana akis kontrol edildi.
-
-Yeni kurulumda once backend'i `uvicorn main:app --reload --port 8000` ile ayaga kaldirin; sonra dashboard'u `npm run dev` ile calistirin.
+- `LLM_PROVIDER`, `OLLAMA_*` veya OpenAI / Anthropic / Gemini anahtarları  
+- `TELEGRAM_ENABLED`, `TELEGRAM_BOT_TOKEN` (isteğe bağlı)  
+- JWT: `config.py` içinde `JWT_SECRET`, `JWT_EXPIRE_MINUTES` (üretimde güçlü secret kullanın)

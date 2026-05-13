@@ -231,7 +231,7 @@ function TodayStep({ stats, chart, latestReport }) {
 
 const CRITICAL_STOCK_OVERVIEW_CAP = 80
 
-function OrdersStep({ stats }) {
+function CriticalStockCard({ stats }) {
   const criticalProducts = stats.stock?.critical_products || []
   const totalCritical = stats.stock?.critical_count ?? criticalProducts.length
 
@@ -242,7 +242,7 @@ function OrdersStep({ stats }) {
     .slice(0, CRITICAL_STOCK_OVERVIEW_CAP)
 
   return (
-    <div className="guided-main-card guided-stock-step">
+    <div className="guided-main-card guided-stock-step guided-stock-step--split">
       <span className="guided-kicker">Kritik stok</span>
       <h2>
         {totalCritical
@@ -293,7 +293,7 @@ function OrdersStep({ stats }) {
   )
 }
 
-function CancelledTodayStep({ stats }) {
+function CancelledTodayCard({ stats }) {
   const rows = stats.orders?.cancelled_today || []
   const count = Number(stats.orders?.cancelled_today_count) || 0
   const title = count === 0
@@ -301,7 +301,7 @@ function CancelledTodayStep({ stats }) {
     : `Bugün ${fmt(count)} sipariş iptal edildi`
 
   return (
-    <div className="guided-main-card guided-stock-step">
+    <div className="guided-main-card guided-stock-step guided-stock-step--split">
       <span className="guided-kicker">Bugünkü iptaller</span>
       <h2>{title}</h2>
       <p className="guided-muted guided-stock-step-lead">
@@ -348,6 +348,15 @@ function CancelledTodayStep({ stats }) {
         </ul>
       )}
       <Link to="/orders" className="guided-link">Siparişlere git →</Link>
+    </div>
+  )
+}
+
+function StockAndCancellationsStep({ stats }) {
+  return (
+    <div className="guided-preparing-cargo-grid">
+      <CriticalStockCard stats={stats} />
+      <CancelledTodayCard stats={stats} />
     </div>
   )
 }
@@ -534,8 +543,7 @@ export default function Overview() {
     return [
       <WelcomeStep user={user} tenant={stats.tenant} />,
       <TodayStep stats={stats} chart={chart} latestReport={stats.latest_report} />,
-      <OrdersStep stats={stats} />,
-      <CancelledTodayStep stats={stats} />,
+      <StockAndCancellationsStep stats={stats} />,
       <PreparingShipmentStep stats={stats} />,
       <ActionsStep aiTasks={aiTasks} />,
     ]
