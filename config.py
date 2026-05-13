@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Intent Classifier
     USE_EMBEDDING_CLASSIFIER: bool = False   # sentence-transformers ağır; demo'da False bırak
 
+    # Visual stock ingestion / image search
+    FASHION_CLIP_MODEL: str = "Marqo/marqo-fashionCLIP"
+    GENERAL_CLIP_MODEL: str = "sentence-transformers/clip-ViT-B-32"
+
     # JWT Auth
     JWT_SECRET: str = "kobi-super-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"

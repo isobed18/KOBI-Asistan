@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from agent.tenant_config import business_type_presets
+from config import settings
 from routers.auth_router import CurrentUser, get_current_user
 from services.visual_stock_ingestion import (
     approve_candidate,
@@ -38,7 +39,12 @@ def capabilities():
         "modes": {
             "demo": "filename + visual_keywords fallback, no model cost",
             "clip": "sentence-transformers CLIP if installed/loaded",
-            "future": "FashionCLIP/SigLIP/ChromaDB can replace SQLite vector store",
+            "fashion": "business_type=giyim tries FASHION_CLIP_MODEL first, then GENERAL_CLIP_MODEL",
+            "future": "SigLIP/ChromaDB can replace SQLite vector store",
+        },
+        "models": {
+            "fashion_clip": settings.FASHION_CLIP_MODEL,
+            "general_clip": settings.GENERAL_CLIP_MODEL,
         },
         "business_type_presets": business_type_presets(),
     }

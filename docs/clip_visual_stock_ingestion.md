@@ -36,18 +36,26 @@ kirmizi-gul-buket.jpeg
 
 ### 2. CLIP modu
 
-`sentence-transformers` ve `Pillow` kuruluysa servis otomatik:
+`sentence-transformers` ve `Pillow` kuruluysa servis otomatik model yuklemeyi dener.
+
+Giyim / butik icin once:
 
 ```text
-sentence-transformers/clip-ViT-B-32
+FASHION_CLIP_MODEL=Marqo/marqo-fashionCLIP
+```
+
+denenir. Yuklenemezse genel CLIP'e duser:
+
+```text
+GENERAL_CLIP_MODEL=sentence-transformers/clip-ViT-B-32
 ```
 
 modelini yuklemeyi dener. Basarirsa image embedding uretir ve SQLite icinde
 `product_image_embeddings.embedding_json` alanina yazar.
 
 Not:
-- FashionCLIP entegrasyonu ileride ayni servis icinde model preset degisimiyle eklenebilir.
-- Su an `giyim` icin model hint ayni CLIP modeline gider; fallback label'i fashion akisini temsil eder.
+- FashionCLIP sadece `business_type=giyim` icin denenir.
+- Model indirilemez/yuklenemezse sistem demo fallback moduna duser ve akisi bozmaz.
 
 ## Eklenen DB Tablolari
 

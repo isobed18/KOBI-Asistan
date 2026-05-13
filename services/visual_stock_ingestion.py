@@ -13,13 +13,15 @@ from typing import Iterable
 
 from database.db import get_connection
 from repositories.products import normalize_name, search_products_by_visual_description
+from config import settings
 
 ROOT = Path(__file__).resolve().parents[1]
 UPLOAD_ROOT = ROOT / "static" / "uploads" / "visual-stock"
 
 BUSINESS_MODEL_HINTS = {
     "giyim": {
-        "clip_model": "sentence-transformers/clip-ViT-B-32",
+        "clip_model_setting": "FASHION_CLIP_MODEL",
+        "fallback_clip_model_setting": "GENERAL_CLIP_MODEL",
         "label": "fashion_clip_fallback",
         "category": "Giyim",
         "keywords": {
@@ -33,7 +35,7 @@ BUSINESS_MODEL_HINTS = {
         },
     },
     "cicek": {
-        "clip_model": "sentence-transformers/clip-ViT-B-32",
+        "clip_model_setting": "GENERAL_CLIP_MODEL",
         "label": "general_clip_fallback",
         "category": "Cicek",
         "keywords": {
@@ -45,7 +47,7 @@ BUSINESS_MODEL_HINTS = {
         },
     },
     "gida": {
-        "clip_model": "sentence-transformers/clip-ViT-B-32",
+        "clip_model_setting": "GENERAL_CLIP_MODEL",
         "label": "packaged_food_fallback",
         "category": "Gida",
         "keywords": {
@@ -82,6 +84,13 @@ def _business_hint(business_type: str | None) -> dict:
     return BUSINESS_MODEL_HINTS.get((business_type or "").lower(), BUSINESS_MODEL_HINTS["giyim"])
 
 
+def _model_from_hint(hint: dict) -> tuple[str, str | None]:
+    primary = getattr(settings, hint.get("clip_model_setting", "GENERAL_CLIP_MODEL"))
+    fallback_setting = hint.get("fallback_clip_model_setting")
+    fallback = getattr(settings, fallback_setting) if fallback_setting else None
+    return primary, fallback
+
+
 @lru_cache(maxsize=4)
 def _load_clip_model(model_name: str):
     try:
@@ -104,6 +113,21 @@ def _encode_image(image_path: str, model_name: str) -> list[float] | None:
         return [float(x) for x in emb.tolist()]
     except Exception:
         return None
+
+
+def _encode_image_with_fallback(
+    image_path: str,
+    primary_model: str,
+    fallback_model: str | None,
+) -> tuple[list[float] | None, str | None]:
+    emb = _encode_image(image_path, primary_model)
+    if emb is not None:
+        return emb, primary_model
+    if fallback_model and fallback_model != primary_model:
+        emb = _encode_image(image_path, fallback_model)
+        if emb is not None:
+            return emb, fallback_model
+    return None, None
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -133,20 +157,22 @@ def classify_image_draft(filename: str, image_path: str, business_type: str | No
     hint = _business_hint(business_type)
     tokens = _tokens_from_filename(filename)
     token_text = " ".join(tokens)
+    token_set = set(tokens)
     matched_keywords: list[str] = []
     for key, value in hint["keywords"].items():
-        if key in token_text:
+        key_norm = normalize_name(key)
+        if key_norm in token_set or key_norm.replace("-", "") in token_set:
             matched_keywords.extend(value.split())
 
     keywords = " ".join(dict.fromkeys([*tokens, *matched_keywords]))
     suggested_name = _title_from_tokens(tokens, fallback="Yeni Gorsel Urun")
     category = hint["category"]
     confidence = 0.56 if matched_keywords else 0.35
-    model_name = hint["clip_model"]
-    embedding = _encode_image(image_path, model_name)
+    primary_model, fallback_model = _model_from_hint(hint)
+    embedding, used_model = _encode_image_with_fallback(image_path, primary_model, fallback_model)
     classifier = hint["label"]
     if embedding is not None:
-        classifier = f"clip:{model_name}"
+        classifier = f"clip:{used_model}"
         confidence = max(confidence, 0.72)
     return CandidateDraft(
         suggested_name=suggested_name,
@@ -158,7 +184,7 @@ def classify_image_draft(filename: str, image_path: str, business_type: str | No
         classifier=classifier,
         confidence=confidence,
         embedding=embedding,
-        model_name=model_name if embedding is not None else classifier,
+        model_name=used_model if embedding is not None else classifier,
     )
 
 
