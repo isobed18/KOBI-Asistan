@@ -481,14 +481,17 @@ def approve_candidate(candidate_id: int, tenant_id: int, payload: dict) -> dict:
     threshold = int(payload.get("low_stock_threshold") or 5)
     visual_keywords = payload.get("visual_keywords") or cand["visual_keywords"]
     description = payload.get("description") or cand["description"]
+    ingredients = payload.get("ingredients")
+    allergens = payload.get("allergens")
+    size_guide = payload.get("size_guide")
 
     cur.execute(
         """
         INSERT INTO products (
             tenant_id, name, category, price, stock_quantity, low_stock_threshold,
-            description, image_url, visual_keywords, advisory_notes
+            description, ingredients, allergens, size_guide, image_url, visual_keywords, advisory_notes
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             tenant_id,
@@ -498,6 +501,9 @@ def approve_candidate(candidate_id: int, tenant_id: int, payload: dict) -> dict:
             stock,
             threshold,
             description,
+            ingredients,
+            allergens,
+            size_guide,
             cand["image_url"],
             visual_keywords,
             payload.get("advisory_notes"),

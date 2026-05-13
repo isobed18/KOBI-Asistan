@@ -9,6 +9,7 @@ import Tickets   from './pages/Tickets.jsx'
 import Reports        from './pages/Reports.jsx'
 import AdminAssistant from './pages/AdminAssistant.jsx'
 import Login          from './pages/Login.jsx'
+import Onboarding     from './pages/Onboarding.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 
 class ErrorBoundary extends Component {
@@ -67,6 +68,7 @@ function AppRoutes() {
               <Route path="/tickets"   element={<ErrorBoundary><Tickets /></ErrorBoundary>}   />
               <Route path="/reports"   element={<ErrorBoundary><Reports /></ErrorBoundary>}   />
               <Route path="/assistant" element={<ErrorBoundary><AdminAssistant /></ErrorBoundary>} />
+              <Route path="/setup"     element={<ErrorBoundary><Onboarding /></ErrorBoundary>} />
               <Route path="*"          element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>

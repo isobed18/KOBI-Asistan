@@ -5,6 +5,7 @@ Telegram Bot — Musteri FSM (siparis, urun, sepet, iptal)
 import json
 import re
 import time
+from io import BytesIO
 from collections import defaultdict
 from datetime import datetime
 
@@ -32,6 +33,7 @@ from repositories.tickets import (
     has_open_telegram_order_request,
 )
 from tools.order_product_tools import musteri_siparisleri, siparis_sorgula
+from services.visual_stock_ingestion import search_by_uploaded_image
 
 telegram_app = None
 adapter = TelegramAdapter()
@@ -83,6 +85,7 @@ def _ud(context) -> dict:
     d.setdefault("takip_kodu", None)
     d.setdefault("cart", {})
     d.setdefault("product_page", 0)
+    d.setdefault("last_visual_product_id", None)
     d.setdefault("pending_name", None)
     d.setdefault("cancel_order_id", None)
     d.setdefault("cancel_name", None)
@@ -153,6 +156,41 @@ def _product_stock(product_id: int) -> int:
     ).fetchone()
     conn.close()
     return int(row["stock_quantity"]) if row else 0
+
+
+def _product_detail(product_id: int) -> dict | None:
+    from database.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT id, name, category, price, stock_quantity, description, size_guide,
+               ingredients, allergens, advisory_notes, image_url
+        FROM products
+        WHERE id = ? AND tenant_id = ? AND is_active = 1
+        """,
+        (product_id, TENANT_ID),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def _fmt_visual_product(product: dict, score: float | None = None) -> str:
+    lines = [
+        "Gorselden en yakin urunu buldum:",
+        f"#{product['id']} - {product['name']}",
+        f"Kategori: {product.get('category') or 'Genel'}",
+        f"Fiyat: {float(product.get('price') or 0):.2f} TL",
+        f"Stok: {int(product.get('stock_quantity') or 0)}",
+    ]
+    if score is not None:
+        lines.append(f"Benzerlik: %{round(score * 100)}")
+    if product.get("size_guide"):
+        lines.append(f"Beden notu: {product['size_guide']}")
+    if product.get("description"):
+        lines.append(f"Not: {product['description'][:220]}")
+    lines.append("\nBunu mu istiyorsunuz?")
+    return "\n".join(lines)
 
 
 def _ticket_desc_lines_for_cart(ud: dict) -> str:
@@ -618,6 +656,23 @@ async def handle_message(update: Update, context):
     state = ud["state"]
 
     if state == S_MENU:
+        low = normalize_name(text)
+        if ud.get("last_visual_product_id") and any(
+            key in low for key in ("beden", "size", "olcu", "olcu", "fit", "kac beden")
+        ):
+            product = _product_detail(int(ud["last_visual_product_id"]))
+            if product and product.get("size_guide"):
+                await update.message.reply_text(
+                    f"{product['name']} icin beden rehberi:\n{product['size_guide']}\n\n"
+                    "Net olcu icin boy/kilo veya kullandiginiz bedeni yazabilirsiniz; isletme gerekirse size donus yapar.",
+                    reply_markup=MENU_KB,
+                )
+                return
+            await update.message.reply_text(
+                "Bu urun icin kayitli beden rehberi yok. Isterseniz sepete ekleyip isletmeden onay bekleyebilirsiniz.",
+                reply_markup=MENU_KB,
+            )
+            return
         if await _try_scope_from_message(update, context, text):
             return
         if await _try_cargo_from_message(update, context, text):
@@ -849,6 +904,65 @@ async def handle_message(update: Update, context):
     await update.message.reply_text("Ana menuye donuldu.", reply_markup=MENU_KB)
 
 
+async def handle_photo(update: Update, context):
+    ud = _ud(context)
+
+    ok, msg = _rate_ok(update.effective_user.id)
+    if not ok:
+        await update.message.reply_text(msg)
+        return
+
+    if not update.message.photo:
+        await update.message.reply_text("Gorsel bulunamadi.", reply_markup=MENU_KB)
+        return
+
+    await update.message.reply_text("Gorseli katalogda ariyorum...")
+    photo = update.message.photo[-1]
+    file = await photo.get_file()
+    payload = await file.download_as_bytearray()
+    out = search_by_uploaded_image(
+        TENANT_ID,
+        f"telegram-{photo.file_unique_id}.jpg",
+        BytesIO(payload),
+        "giyim",
+    )
+    results = out.get("results") or []
+    if not results:
+        await update.message.reply_text(
+            "Bu gorsele benzeyen stokta urun bulamadim. Urun listesinden bakabilirsiniz.",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Urun Listesi", callback_data="m:urun_new")],
+                    [InlineKeyboardButton("Ana menu", callback_data="m:home")],
+                ]
+            ),
+        )
+        return
+
+    top = results[0]
+    product_id = int(top.get("product_id") or top.get("id"))
+    product = _product_detail(product_id)
+    if not product:
+        await update.message.reply_text(
+            "Benzer bir urun bulundu ama stok kaydi aktif degil. Urun listesinden devam edebilirsiniz.",
+            reply_markup=MENU_KB,
+        )
+        return
+
+    ud["state"] = S_MENU
+    ud["last_visual_product_id"] = product_id
+    kb = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("Sepete ekle", callback_data=f"a:{product_id}"),
+                InlineKeyboardButton("Urun Listesi", callback_data="m:urun_new"),
+            ],
+            [InlineKeyboardButton("Sepetim", callback_data="cart")],
+        ]
+    )
+    await update.message.reply_text(_fmt_visual_product(product, top.get("score")), reply_markup=kb)
+
+
 async def setup_telegram():
     global telegram_app
     if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_ENABLED:
@@ -859,6 +973,7 @@ async def setup_telegram():
     telegram_app.add_handler(CommandHandler("start", start_command))
     telegram_app.add_handler(CommandHandler("menu", menu_command))
     telegram_app.add_handler(CallbackQueryHandler(unified_callback))
+    telegram_app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     await telegram_app.initialize()

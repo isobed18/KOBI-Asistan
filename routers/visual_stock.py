@@ -26,6 +26,9 @@ class CandidateApproveRequest(BaseModel):
     low_stock_threshold: int | None = None
     visual_keywords: str | None = None
     description: str | None = None
+    ingredients: str | None = None
+    allergens: str | None = None
+    size_guide: str | None = None
     advisory_notes: str | None = None
 
 

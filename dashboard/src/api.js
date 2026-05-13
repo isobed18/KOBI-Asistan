@@ -17,6 +17,23 @@ async function req(path, options = {}) {
   return res.json()
 }
 
+async function reqForm(path, formData, options = {}) {
+  const token = localStorage.getItem('kobi_token')
+  const res = await fetch(BASE + path, {
+    method: options.method || 'POST',
+    body: formData,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Istek basarisiz')
+  }
+  return res.json()
+}
+
 // Dashboard
 export const getDashboardStats = () => req('/dashboard/stats')
 export const getCargoDashboard = () => req('/dashboard/cargo')
@@ -105,3 +122,17 @@ export const getSalesChart = (days = 14) =>
   req(`/dashboard/sales-chart?days=${encodeURIComponent(days)}`)
 export const generateAiTasks = () => req('/dashboard/ai-tasks', { method: 'POST' })
 export const getAnalytics = () => req('/dashboard/analytics')
+
+// Visual stock onboarding
+export const getVisualStockCapabilities = () => req('/visual-stock/capabilities')
+export const uploadVisualStockBatch = ({ businessType = 'giyim', files = [] }) => {
+  const fd = new FormData()
+  fd.append('business_type', businessType)
+  files.forEach(file => fd.append('files', file))
+  return reqForm('/visual-stock/batches', fd)
+}
+export const getVisualStockBatch = (batchId) => req(`/visual-stock/batches/${batchId}`)
+export const approveVisualCandidate = (candidateId, body) =>
+  req(`/visual-stock/candidates/${candidateId}/approve`, { method: 'POST', body: JSON.stringify(body) })
+export const rejectVisualCandidate = (candidateId, reason = '') =>
+  req(`/visual-stock/candidates/${candidateId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) })

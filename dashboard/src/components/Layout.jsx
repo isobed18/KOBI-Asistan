@@ -79,6 +79,16 @@ function IconNavPackage(props) {
   )
 }
 
+function IconNavUpload(props) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" x2="12" y1="3" y2="15" />
+    </svg>
+  )
+}
+
 function IconNavShoppingCart(props) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
@@ -116,6 +126,7 @@ function IconNavFileBarChart(props) {
 const NAV = [
   { to: '/',          Icon: IconNavClipboard, label: 'Günün özeti' },
   { to: '/assistant', Icon: IconNavSparkles, label: 'AI Asistan', highlight: true },
+  { to: '/setup',     Icon: IconNavUpload, label: 'Demo kurulum' },
   { to: '/inventory', Icon: IconNavPackage, label: 'Stoklar' },
   { to: '/orders',    Icon: IconNavShoppingCart, label: 'Siparişler' },
   { to: '/cargo',     Icon: IconNavTruck, label: 'Kargolar' },
@@ -126,6 +137,7 @@ const NAV = [
 const PAGE_TITLES = {
   '/':          { title: '', sub: '' },
   '/assistant': { title: 'AI Asistan', sub: '' },
+  '/setup':     { title: 'Demo kurulum', sub: '' },
   '/tickets':   { title: 'Müdahale', sub: '' },
   '/orders':    { title: 'Siparişler', sub: '' },
   '/inventory': { title: 'Stoklar', sub: '' },
