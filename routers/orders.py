@@ -4,7 +4,7 @@ import os
 import sys
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -19,10 +19,9 @@ from repositories.orders import (
     patch_order,
     update_order_status as repo_update_order_status,
 )
+from routers.auth_router import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/orders", tags=["Siparisler"])
-
-TENANT_ID = 1
 
 VALID_STATUSES = frozenset(
     {"hazırlanıyor", "kargoda", "teslim_edildi", "tamamlandi", "tamamlandı", "iptal"}
@@ -30,7 +29,7 @@ VALID_STATUSES = frozenset(
 
 
 @router.get("/status-counts", summary="Durumlara gore siparis adetleri")
-def order_status_counts():
+def order_status_counts(current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     rows = conn.execute(
         """
@@ -39,7 +38,7 @@ def order_status_counts():
         WHERE tenant_id = ?
         GROUP BY status
         """,
-        (TENANT_ID,),
+        (current_user.tenant_id,),
     ).fetchall()
     conn.close()
     by_status = {r["status"]: int(r["c"]) for r in rows}
@@ -54,13 +53,14 @@ def list_orders(
     search: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=400, detail="limit 1-200 arasinda olmalidir.")
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset negatif olamaz.")
     items, total = fetch_orders_page_enriched(
-        tenant_id=TENANT_ID,
+        tenant_id=current_user.tenant_id,
         status=status,
         search=search,
         today=today,
@@ -71,11 +71,11 @@ def list_orders(
 
 
 @router.get("/summary", summary="Gunluk ozet")
-def daily_summary():
+def daily_summary(current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     rows = cursor.execute(
-        "SELECT status, total_price FROM orders WHERE tenant_id = ?", (TENANT_ID,)
+        "SELECT status, total_price FROM orders WHERE tenant_id = ?", (current_user.tenant_id,)
     ).fetchall()
     by_status = {}
     total_revenue = 0.0
@@ -92,11 +92,11 @@ def daily_summary():
         WHERE stock_quantity <= low_stock_threshold AND is_active = 1
         AND tenant_id = ?
         """,
-        (TENANT_ID,),
+        (current_user.tenant_id,),
     ).fetchall()
     pending = cursor.execute(
         "SELECT COUNT(*) as c FROM orders WHERE status = 'hazırlanıyor' AND tenant_id = ?",
-        (TENANT_ID,),
+        (current_user.tenant_id,),
     ).fetchone()["c"]
     conn.close()
     return {
@@ -109,15 +109,15 @@ def daily_summary():
 
 
 @router.get("/{order_id}", summary="Siparis detayi")
-def get_order(order_id: int):
-    result = get_order_enriched(order_id, tenant_id=TENANT_ID)
+def get_order(order_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    result = get_order_enriched(order_id, tenant_id=current_user.tenant_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Siparis #{order_id} bulunamadi.")
     return result
 
 
 @router.put("/{order_id}/status", summary="Siparis durumunu guncelle")
-def update_order_status(order_id: int, body: OrderStatusUpdate):
+def update_order_status(order_id: int, body: OrderStatusUpdate, current_user: CurrentUser = Depends(get_current_user)):
     if body.status not in VALID_STATUSES:
         raise HTTPException(
             status_code=400,
@@ -128,7 +128,7 @@ def update_order_status(order_id: int, body: OrderStatusUpdate):
     result = repo_update_order_status(
         order_id,
         body.status,
-        tenant_id=TENANT_ID,
+        tenant_id=current_user.tenant_id,
         cargo_tracking_code=sent["cargo_tracking_code"] if "cargo_tracking_code" in sent else UNSET,
         cargo_company=sent["cargo_company"] if "cargo_company" in sent else UNSET,
     )
@@ -138,10 +138,10 @@ def update_order_status(order_id: int, body: OrderStatusUpdate):
 
 
 @router.patch("/{order_id}", summary="Siparis bilgi ve kalemleri guncelle")
-def patch_order_route(order_id: int, body: OrderPatch):
+def patch_order_route(order_id: int, body: OrderPatch, current_user: CurrentUser = Depends(get_current_user)):
     result = patch_order(
         order_id,
-        tenant_id=TENANT_ID,
+        tenant_id=current_user.tenant_id,
         customer_name=body.customer_name,
         customer_phone=body.customer_phone,
         notes=body.notes,
@@ -154,21 +154,21 @@ def patch_order_route(order_id: int, body: OrderPatch):
 
 
 @router.delete("/{order_id}", summary="Siparisi sil ve stogu iade et")
-def delete_order_route(order_id: int):
-    result = delete_order_and_restore_stock(order_id, tenant_id=TENANT_ID)
+def delete_order_route(order_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    result = delete_order_and_restore_stock(order_id, tenant_id=current_user.tenant_id)
     if result.get("hata"):
         raise HTTPException(status_code=404, detail=result["hata"])
     return {"message": f"Siparis #{order_id} silindi.", "result": result}
 
 
 @router.post("/", summary="Yeni siparis olustur", status_code=201)
-def create_order(body: OrderCreate):
+def create_order(body: OrderCreate, current_user: CurrentUser = Depends(get_current_user)):
     result = create_order_from_items(
         customer_name=body.customer_name,
         customer_phone=body.customer_phone,
         notes=body.notes,
         items=list(body.items),
-        tenant_id=TENANT_ID,
+        tenant_id=current_user.tenant_id,
     )
     if result.get("hata"):
         msg = result["hata"]

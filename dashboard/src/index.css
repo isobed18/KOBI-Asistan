@@ -2839,6 +2839,21 @@ select option { background: var(--surface); }
   .command-report-strip { align-items: flex-start; flex-direction: column; }
   .command-task-actions { width: 100%; justify-content: flex-start; }
 }
+.inventory-product-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: contain;
+  display: inline-grid;
+  place-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  font-size: 12px;
+}
+.inventory-product-thumb--empty {
+  background: color-mix(in srgb, var(--surface2) 60%, transparent);
+}
 
 /* ---- Demo onboarding / visual stock setup ---- */
 .setup-page {

@@ -125,6 +125,8 @@ export const getAnalytics = () => req('/dashboard/analytics')
 
 // Visual stock onboarding
 export const getVisualStockCapabilities = () => req('/visual-stock/capabilities')
+export const registerTenantSetup = (body) =>
+  req('/tenant-setup/register', { method: 'POST', body: JSON.stringify(body) })
 export const uploadVisualStockBatch = ({ businessType = 'giyim', files = [] }) => {
   const fd = new FormData()
   fd.append('business_type', businessType)
@@ -136,3 +138,5 @@ export const approveVisualCandidate = (candidateId, body) =>
   req(`/visual-stock/candidates/${candidateId}/approve`, { method: 'POST', body: JSON.stringify(body) })
 export const rejectVisualCandidate = (candidateId, reason = '') =>
   req(`/visual-stock/candidates/${candidateId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) })
+export const duplicateVisualCandidate = (candidateId, body) =>
+  req(`/visual-stock/candidates/${candidateId}/duplicate`, { method: 'POST', body: JSON.stringify(body) })

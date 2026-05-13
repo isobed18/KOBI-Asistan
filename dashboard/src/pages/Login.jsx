@@ -84,6 +84,9 @@ export default function Login() {
           <button type="submit" className="btn btn-primary calm-login-button" disabled={loading || !username || !password}>
             {loading ? 'Hazırlanıyor...' : 'Devam et'}
           </button>
+          <button type="button" className="btn calm-login-button" onClick={() => navigate('/register')} disabled={loading}>
+            Yeni KOBİ hesabı oluştur
+          </button>
         </form>
       </motion.div>
     </div>

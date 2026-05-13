@@ -9,6 +9,7 @@ from routers.auth_router import CurrentUser, get_current_user
 from services.visual_stock_ingestion import (
     approve_candidate,
     create_batch,
+    duplicate_candidate_product,
     list_batch_candidates,
     reject_candidate,
     save_upload_to_batch,
@@ -112,6 +113,18 @@ def reject_visual_candidate(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     out = reject_candidate(candidate_id, current_user.tenant_id, body.reason)
+    if out.get("hata"):
+        raise HTTPException(status_code=404, detail=out["hata"])
+    return out
+
+
+@router.post("/candidates/{candidate_id}/duplicate")
+def duplicate_visual_candidate(
+    candidate_id: int,
+    body: CandidateApproveRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    out = duplicate_candidate_product(candidate_id, current_user.tenant_id, body.model_dump(exclude_unset=True))
     if out.get("hata"):
         raise HTTPException(status_code=404, detail=out["hata"])
     return out

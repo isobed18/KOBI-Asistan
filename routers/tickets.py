@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -23,6 +23,7 @@ from repositories.orders import (
     get_order,
 )
 from integrations.notifier import send_customer_telegram_message
+from routers.auth_router import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/tickets", tags=["Biletler"])
 
@@ -46,12 +47,13 @@ def list_tickets(
     type: Optional[str] = None,
     priority: Optional[str] = None,
     limit: int = 50,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     conn = get_connection()
     cursor = conn.cursor()
 
-    query = "SELECT * FROM tickets WHERE 1=1"
-    params: list = []
+    query = "SELECT * FROM tickets WHERE tenant_id = ?"
+    params: list = [current_user.tenant_id]
 
     if status:
         query += " AND status = ?"
@@ -72,10 +74,10 @@ def list_tickets(
 
 
 @router.get("/{ticket_id}", summary="Bilet detayı")
-def get_ticket(ticket_id: int):
+def get_ticket(ticket_id: int, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
-    row = cursor.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+    row = cursor.execute("SELECT * FROM tickets WHERE id = ? AND tenant_id = ?", (ticket_id, current_user.tenant_id)).fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail=f"Bilet #{ticket_id} bulunamadı.")
@@ -83,7 +85,7 @@ def get_ticket(ticket_id: int):
 
 
 @router.post("/", summary="Manuel bilet oluştur", status_code=201)
-def create_ticket(body: TicketCreate):
+def create_ticket(body: TicketCreate, current_user: CurrentUser = Depends(get_current_user)):
     """Repository katmanı üzerinden bilet oluşturur; notifier otomatik tetiklenir."""
     if body.type not in VALID_TYPES:
         raise HTTPException(status_code=400, detail=f"Gecersiz tip: {body.type}")
@@ -97,7 +99,7 @@ def create_ticket(body: TicketCreate):
             "related_order_id": body.related_order_id,
             "related_product_id": body.related_product_id,
         },
-        tenant_id=1,  # TODO: JWT'den al
+        tenant_id=current_user.tenant_id,
     )
     return {"message": "Bilet oluşturuldu.", "ticket_id": ticket_id}
 
@@ -110,13 +112,13 @@ def _parse_telegram_order_payload(llm_raw: str | None) -> dict:
 
 
 @router.patch("/{ticket_id}/status", summary="Bilet durumunu güncelle")
-def update_ticket_status(ticket_id: int, body: TicketStatusUpdate):
+def update_ticket_status(ticket_id: int, body: TicketStatusUpdate, current_user: CurrentUser = Depends(get_current_user)):
     if body.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Geçersiz durum: {body.status}")
 
     conn = get_connection()
     cursor = conn.cursor()
-    row = cursor.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
+    row = cursor.execute("SELECT * FROM tickets WHERE id = ? AND tenant_id = ?", (ticket_id, current_user.tenant_id)).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail=f"Bilet #{ticket_id} bulunamadı.")
@@ -194,7 +196,7 @@ def update_ticket_status(ticket_id: int, body: TicketStatusUpdate):
                 status_code=400,
                 detail="Bilet icinde siparis kalemi yok (items).",
             )
-        tenant_id = int(payload.get("tenant_id") or 1)
+        tenant_id = current_user.tenant_id
         name = str(payload.get("customer_name") or "").strip() or "Musteri"
         phone = payload.get("customer_phone")
         notes = str(payload.get("notes") or "Telegram onay")
@@ -261,7 +263,7 @@ def update_ticket_status(ticket_id: int, body: TicketStatusUpdate):
         if not oid_raw:
             raise HTTPException(status_code=400, detail="Bilette iliskili siparis yok.")
         oid = int(oid_raw)
-        order = get_order(oid, tenant_id=1)
+        order = get_order(oid, tenant_id=current_user.tenant_id)
         if not order:
             raise HTTPException(status_code=400, detail=f"Siparis #{oid} bulunamadi.")
         st = order.get("status") or ""
@@ -273,7 +275,7 @@ def update_ticket_status(ticket_id: int, body: TicketStatusUpdate):
                     "Once siparisi uygun duruma getirin veya manuel islem yapin."
                 ),
             )
-        del_res = delete_order_and_restore_stock(oid, tenant_id=1)
+        del_res = delete_order_and_restore_stock(oid, tenant_id=current_user.tenant_id)
         if del_res.get("hata"):
             raise HTTPException(status_code=400, detail=del_res["hata"])
 
@@ -323,18 +325,21 @@ def update_ticket_status(ticket_id: int, body: TicketStatusUpdate):
 
 
 @router.get("/stats/summary", summary="Bilet istatistikleri")
-def ticket_stats():
+def ticket_stats(current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
 
     by_status = cursor.execute(
-        "SELECT status, COUNT(*) as c FROM tickets GROUP BY status"
+        "SELECT status, COUNT(*) as c FROM tickets WHERE tenant_id = ? GROUP BY status",
+        (current_user.tenant_id,),
     ).fetchall()
     by_type = cursor.execute(
-        "SELECT type, COUNT(*) as c FROM tickets GROUP BY type"
+        "SELECT type, COUNT(*) as c FROM tickets WHERE tenant_id = ? GROUP BY type",
+        (current_user.tenant_id,),
     ).fetchall()
     by_priority = cursor.execute(
-        "SELECT priority, COUNT(*) as c FROM tickets WHERE status != 'resolved' GROUP BY priority"
+        "SELECT priority, COUNT(*) as c FROM tickets WHERE tenant_id = ? AND status != 'resolved' GROUP BY priority",
+        (current_user.tenant_id,),
     ).fetchall()
 
     conn.close()

@@ -561,6 +561,7 @@ export default function Inventory() {
               <thead>
                 <tr>
                   <SortableTh columnKey="id" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>#</SortableTh>
+                  <th>Görsel</th>
                   <SortableTh columnKey="name" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Ürün</SortableTh>
                   <SortableTh columnKey="category" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Kategori</SortableTh>
                   <SortableTh columnKey="price" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right">Fiyat</SortableTh>
@@ -585,6 +586,13 @@ export default function Inventory() {
                     onPointerLeave={rowPointerEnd}
                   >
                     <td style={{ color: 'var(--text3)' }}>{p.id}</td>
+                    <td>
+                      {p.image_url ? (
+                        <img className="inventory-product-thumb" src={p.image_url} alt={p.name} />
+                      ) : (
+                        <span className="inventory-product-thumb inventory-product-thumb--empty">-</span>
+                      )}
+                    </td>
                     <td
                       className={cellClass(p, 'name', true)}
                       title="Düzenlemek için çift tıklayın"

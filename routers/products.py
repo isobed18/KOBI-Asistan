@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from typing import Optional
 import sys
 import os
@@ -11,6 +11,7 @@ from agent.tenant_context import get_tenant_id
 from repositories.products import deactivate_product as repo_deactivate_product
 from repositories.products import patch_product as repo_patch_product
 from services.stock_intervention import schedule_stock_intervention_check
+from routers.auth_router import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/products", tags=["Ürünler"])
 
@@ -26,7 +27,8 @@ def _add_low_stock_flag(product: dict) -> dict:
 def list_products(
     category: Optional[str] = None,
     low_stock: bool = False,
-    search: Optional[str] = None
+    search: Optional[str] = None,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """
     - ?category=Gıda        → kategoriye göre filtrele
@@ -37,7 +39,7 @@ def list_products(
     cursor = conn.cursor()
 
     query = "SELECT * FROM products WHERE is_active = 1 AND tenant_id = ?"
-    params = [get_tenant_id()]
+    params = [current_user.tenant_id]
 
     if category:
         query += " AND category = ?"
@@ -56,12 +58,12 @@ def list_products(
 
 #  GET /products/{id}
 @router.get("/{product_id}", summary="Ürün detayı")
-def get_product(product_id: int):
+def get_product(product_id: int, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     row = cursor.execute(
         "SELECT * FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
-        (product_id, get_tenant_id())
+        (product_id, current_user.tenant_id)
     ).fetchone()
     if not row:
         conn.close()
@@ -72,7 +74,7 @@ def get_product(product_id: int):
 
 #  POST /products
 @router.post("/", summary="Yeni ürün ekle", status_code=201)
-def create_product(body: ProductCreate):
+def create_product(body: ProductCreate, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -82,7 +84,7 @@ def create_product(body: ProductCreate):
         )
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
-        get_tenant_id(), body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold,
+        current_user.tenant_id, body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold,
         body.description, body.ingredients, body.allergens, body.size_guide, body.advisory_notes,
         body.image_url, body.visual_keywords,
     ))
@@ -94,27 +96,27 @@ def create_product(body: ProductCreate):
 
 #  PATCH /products/{id}
 @router.patch("/{product_id}", summary="Ürün alanlarını güncelle")
-def patch_product(product_id: int, body: ProductPatch, background_tasks: BackgroundTasks):
+def patch_product(product_id: int, body: ProductPatch, background_tasks: BackgroundTasks, current_user: CurrentUser = Depends(get_current_user)):
     """İsim, kategori, fiyat, stok ve eşik değerlerini doğrudan günceller; stok değişirse hareket kaydı oluşturulur."""
     data = body.model_dump(exclude_unset=True)
     if not data:
         raise HTTPException(status_code=400, detail="Güncellenecek alan yok.")
 
-    out = repo_patch_product(product_id, get_tenant_id(), data)
+    out = repo_patch_product(product_id, current_user.tenant_id, data)
     if out.get("hata"):
         code = 404 if "bulunamadi" in (out["hata"] or "").lower() else 400
         raise HTTPException(status_code=code, detail=out["hata"])
     urun = _add_low_stock_flag(dict(out["urun"]))
     if {"stock_quantity", "low_stock_threshold"} & data.keys():
         if urun.get("is_active", 1) and urun.get("stock_quantity", 10**9) <= urun.get("low_stock_threshold", 0):
-            tid = get_tenant_id()
+            tid = current_user.tenant_id
             background_tasks.add_task(schedule_stock_intervention_check, product_id, tid)
     return urun
 
 
 #  PATCH /products/{id}/stock
 @router.patch("/{product_id}/stock", summary="Stok güncelle")
-def update_stock(product_id: int, body: StockUpdateRequest, background_tasks: BackgroundTasks):
+def update_stock(product_id: int, body: StockUpdateRequest, background_tasks: BackgroundTasks, current_user: CurrentUser = Depends(get_current_user)):
     """
     quantity_change pozitif ise stok artar, negatif ise azalır.
     Örnek: {"quantity_change": 50, "reason": "Yeni sevkiyat"}
@@ -123,7 +125,7 @@ def update_stock(product_id: int, body: StockUpdateRequest, background_tasks: Ba
     cursor = conn.cursor()
     row = cursor.execute(
         "SELECT id, stock_quantity FROM products WHERE id = ? AND is_active = 1 AND tenant_id = ?",
-        (product_id, get_tenant_id())
+        (product_id, current_user.tenant_id)
     ).fetchone()
     if not row:
         conn.close()
@@ -140,15 +142,15 @@ def update_stock(product_id: int, body: StockUpdateRequest, background_tasks: Ba
     old_qty = row["stock_quantity"]
     cursor.execute(
         "UPDATE products SET stock_quantity = ? WHERE id = ? AND tenant_id = ?",
-        (new_qty, product_id, get_tenant_id())
+        (new_qty, product_id, current_user.tenant_id)
     )
     cursor.execute("""
         INSERT INTO stock_movements (tenant_id, product_id, delta, reason, before_qty, after_qty)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (get_tenant_id(), product_id, body.quantity_change, body.reason or "manuel", old_qty, new_qty))
+    """, (current_user.tenant_id, product_id, body.quantity_change, body.reason or "manuel", old_qty, new_qty))
     conn.commit()
     conn.close()
-    tid = get_tenant_id()
+    tid = current_user.tenant_id
     background_tasks.add_task(schedule_stock_intervention_check, product_id, tid)
     return {
         "message": "Stok güncellendi.",
@@ -162,7 +164,7 @@ def update_stock(product_id: int, body: StockUpdateRequest, background_tasks: Ba
 
 #  GET /products/{id}/movements
 @router.get("/{product_id}/movements", summary="Stok hareket geçmişi")
-def stock_movements(product_id: int, limit: int = 50):
+def stock_movements(product_id: int, limit: int = 50, current_user: CurrentUser = Depends(get_current_user)):
     conn = get_connection()
     cursor = conn.cursor()
     rows = cursor.execute("""
@@ -171,15 +173,15 @@ def stock_movements(product_id: int, limit: int = 50):
         WHERE product_id = ? AND tenant_id = ?
         ORDER BY created_at DESC
         LIMIT ?
-    """, (product_id, get_tenant_id(), limit)).fetchall()
+    """, (product_id, current_user.tenant_id, limit)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
 # DELETE /products/{id} (soft delete)
 @router.delete("/{product_id}", summary="Ürünü pasife al")
-def deactivate_product(product_id: int):
-    out = repo_deactivate_product(product_id, get_tenant_id())
+def deactivate_product(product_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    out = repo_deactivate_product(product_id, current_user.tenant_id)
     if out.get("hata"):
         raise HTTPException(status_code=404, detail=out["hata"])
     return {"message": f"Ürün #{product_id} pasife alındı."}

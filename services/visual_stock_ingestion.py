@@ -546,6 +546,83 @@ def approve_candidate(candidate_id: int, tenant_id: int, payload: dict) -> dict:
     return {"basari": True, "product_id": product_id, "candidate_id": candidate_id}
 
 
+def duplicate_candidate_product(candidate_id: int, tenant_id: int, payload: dict) -> dict:
+    """Create another product from the same visual candidate without closing the candidate."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cand = cur.execute(
+        "SELECT * FROM visual_stock_candidates WHERE id = ? AND tenant_id = ?",
+        (candidate_id, tenant_id),
+    ).fetchone()
+    if not cand:
+        conn.close()
+        return {"hata": f"Aday #{candidate_id} bulunamadi."}
+
+    name = (payload.get("name") or f"{cand['suggested_name']} Varyant").strip()
+    category = payload.get("category") or cand["suggested_category"]
+    price = float(payload.get("price") if payload.get("price") is not None else cand["suggested_price"] or 0)
+    stock = int(payload.get("stock_quantity") if payload.get("stock_quantity") is not None else cand["suggested_stock"] or 1)
+    threshold = int(payload.get("low_stock_threshold") or 5)
+    visual_keywords = payload.get("visual_keywords") or cand["visual_keywords"]
+    description = payload.get("description") or cand["description"]
+
+    cur.execute(
+        """
+        INSERT INTO products (
+            tenant_id, name, category, price, stock_quantity, low_stock_threshold,
+            description, ingredients, allergens, size_guide, image_url, visual_keywords, advisory_notes
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            tenant_id,
+            name,
+            category,
+            price,
+            stock,
+            threshold,
+            description,
+            payload.get("ingredients"),
+            payload.get("allergens"),
+            payload.get("size_guide"),
+            cand["image_url"],
+            visual_keywords,
+            payload.get("advisory_notes"),
+        ),
+    )
+    product_id = int(cur.lastrowid)
+    emb = cur.execute(
+        """
+        SELECT image_path, image_url, model_name, embedding_json, keywords
+        FROM product_image_embeddings
+        WHERE tenant_id = ? AND candidate_id = ? AND embedding_json IS NOT NULL
+        ORDER BY id DESC LIMIT 1
+        """,
+        (tenant_id, candidate_id),
+    ).fetchone()
+    if emb:
+        cur.execute(
+            """
+            INSERT INTO product_image_embeddings (
+                tenant_id, product_id, image_path, image_url, model_name, embedding_json, keywords
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tenant_id,
+                product_id,
+                emb["image_path"],
+                emb["image_url"],
+                emb["model_name"],
+                emb["embedding_json"],
+                visual_keywords or emb["keywords"],
+            ),
+        )
+    conn.commit()
+    conn.close()
+    return {"basari": True, "product_id": product_id, "candidate_id": candidate_id}
+
+
 def reject_candidate(candidate_id: int, tenant_id: int, reason: str | None = None) -> dict:
     conn = get_connection()
     cur = conn.cursor()

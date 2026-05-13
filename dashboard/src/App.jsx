@@ -57,6 +57,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Onboarding publicMode />} />
       <Route path="/*" element={
         <RequireAuth>
           <Layout>

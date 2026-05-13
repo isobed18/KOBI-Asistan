@@ -1,0 +1,29 @@
+tenant_id: 4
+slug: laluna-cicek
+business_name: Laluna Çiçek
+business_type: cicek
+language: tr
+agent:
+  name: Laluna Çiçek Asistanı
+  role: Müşteri iletişimi ve operasyon asistanı
+  personality: 'Laluna Çiçek için çalışan asistan. KOBİ notları: Hediye ve çiçek tasarımları
+    satan butik mağaza. Müşteriye özel gün, renk ve duyguya göre öneri verir.'
+  rules:
+  - Özel gün amacını sor.
+  - Renk tercihi varsa stoktaki benzer buketleri öner.
+  - Teslimat zamanı kritikse net teyit iste.
+llm:
+  provider: ollama
+  model: qwen3.6:27b
+  temperature: 0.2
+features:
+  dashboard_theme: elegant
+  whatsapp_business: false
+  telegram_admin_notifications: true
+  image_search: true
+  product_advisory: true
+  faq_rag: false
+  report_export: false
+branding:
+  primary_color: '#2563eb'
+  accent_color: '#16a34a'

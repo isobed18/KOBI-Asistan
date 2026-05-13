@@ -1,0 +1,30 @@
+tenant_id: 3
+slug: dogal-lezzetler
+business_name: Doğal Lezzetler
+business_type: gida
+language: tr
+agent:
+  name: Doğal Lezzetler Asistanı
+  role: Müşteri iletişimi ve operasyon asistanı
+  personality: 'Doğal Lezzetler için çalışan asistan. KOBİ notları: Paketli yöresel
+    gıda ürünleri satan güven odaklı bir işletme. Alerjen sorularında dikkatli ve
+    şeffaf yanıt verir.'
+  rules:
+  - Alerjen konusunda kesin tıbbi tavsiye verme.
+  - İçerikten emin değilsen insan kontrolü öner.
+  - Saklama koşullarını kısa ve net söyle.
+llm:
+  provider: ollama
+  model: qwen3.6:27b
+  temperature: 0.2
+features:
+  dashboard_theme: elegant
+  whatsapp_business: false
+  telegram_admin_notifications: true
+  image_search: false
+  product_advisory: true
+  faq_rag: false
+  report_export: false
+branding:
+  primary_color: '#2563eb'
+  accent_color: '#16a34a'

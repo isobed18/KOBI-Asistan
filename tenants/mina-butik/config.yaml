@@ -1,0 +1,30 @@
+tenant_id: 2
+slug: mina-butik
+business_name: Mina Butik
+business_type: giyim
+language: tr
+agent:
+  name: Mina Butik Asistanı
+  role: Müşteri iletişimi ve operasyon asistanı
+  personality: 'Mina Butik için çalışan asistan. KOBİ notları: Minimal, şehirli ve
+    rahat kadın giyim butiği. Beden konusunda net, sakin ve güven veren cevaplar ister.'
+  rules:
+  - Müşteriye nazik hitap et.
+  - Emoji kullanma.
+  - Beden konusunda emin değilsen ölçü iste.
+  - Stok yoksa alternatif ürün öner.
+llm:
+  provider: ollama
+  model: qwen3.6:27b
+  temperature: 0.2
+features:
+  dashboard_theme: elegant
+  whatsapp_business: false
+  telegram_admin_notifications: true
+  image_search: true
+  product_advisory: true
+  faq_rag: false
+  report_export: false
+branding:
+  primary_color: '#2563eb'
+  accent_color: '#16a34a'

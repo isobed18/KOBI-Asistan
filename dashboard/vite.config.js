@@ -14,6 +14,8 @@ export default defineConfig({
       '/reports': { target: 'http://localhost:8000', changeOrigin: true },
       '/auth':    { target: 'http://localhost:8000', changeOrigin: true },
       '/visual-stock': { target: 'http://localhost:8000', changeOrigin: true },
+      '/tenant-setup': { target: 'http://localhost:8000', changeOrigin: true },
+      '/static': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
   build: {
