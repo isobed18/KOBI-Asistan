@@ -8,6 +8,7 @@ from config import settings
 from routers.auth_router import CurrentUser, get_current_user
 from services.visual_stock_ingestion import (
     approve_candidate,
+    claim_setup_batch,
     create_batch,
     duplicate_candidate_product,
     list_batch_candidates,
@@ -86,12 +87,56 @@ async def upload_visual_stock_batch(
     }
 
 
+@router.post("/setup/batches")
+async def upload_visual_stock_setup_batch(
+    business_type: str = Form("giyim"),
+    files: list[UploadFile] = File(...),
+):
+    """Public onboarding upload.
+
+    The batch is kept under tenant_id=0 until the final signup step creates the
+    real tenant. It lets the wizard classify images before persisting an account.
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="En az bir gorsel yukleyin.")
+    batch_id = create_batch(0, business_type, None)
+    candidates = []
+    for file in files:
+        if not (file.content_type or "").startswith("image/"):
+            continue
+        candidates.append(
+            save_upload_to_batch(
+                batch_id,
+                0,
+                file.filename or "urun.jpg",
+                file.file,
+                business_type,
+            )
+        )
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Gecerli image dosyasi bulunamadi.")
+    return {
+        "batch_id": batch_id,
+        "status": "pending_review",
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+    }
+
+
 @router.get("/batches/{batch_id}")
 def get_batch(batch_id: int, current_user: CurrentUser = Depends(get_current_user)):
     return {
         "batch_id": batch_id,
         "candidates": list_batch_candidates(batch_id, current_user.tenant_id),
     }
+
+
+@router.post("/batches/{batch_id}/claim")
+def claim_visual_setup_batch(batch_id: int, current_user: CurrentUser = Depends(get_current_user)):
+    out = claim_setup_batch(batch_id, current_user.tenant_id, current_user.id)
+    if out.get("hata"):
+        raise HTTPException(status_code=404, detail=out["hata"])
+    return out
 
 
 @router.post("/candidates/{candidate_id}/approve")

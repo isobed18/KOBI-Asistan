@@ -460,6 +460,54 @@ def list_batch_candidates(batch_id: int, tenant_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def claim_setup_batch(batch_id: int, tenant_id: int, user_id: int | None = None) -> dict:
+    """Move a public onboarding batch (tenant_id=0) to the newly created tenant."""
+    conn = get_connection()
+    cur = conn.cursor()
+    batch = cur.execute(
+        "SELECT * FROM visual_stock_batches WHERE id = ? AND tenant_id = 0",
+        (batch_id,),
+    ).fetchone()
+    if not batch:
+        conn.close()
+        return {"hata": f"Kurulum batch #{batch_id} bulunamadi veya zaten baglanmis."}
+
+    rows = cur.execute(
+        "SELECT id, image_url, image_path FROM visual_stock_candidates WHERE batch_id = ? AND tenant_id = 0",
+        (batch_id,),
+    ).fetchall()
+    for row in rows:
+        old_url = row["image_url"] or ""
+        old_path = Path(row["image_path"])
+        new_dir = UPLOAD_ROOT / str(tenant_id) / str(batch_id)
+        new_dir.mkdir(parents=True, exist_ok=True)
+        new_path = new_dir / old_path.name
+        if old_path.exists() and old_path.resolve() != new_path.resolve():
+            shutil.move(str(old_path), str(new_path))
+        new_url = old_url.replace("/visual-stock/0/", f"/visual-stock/{tenant_id}/", 1)
+        cur.execute(
+            "UPDATE visual_stock_candidates SET tenant_id = ?, image_path = ?, image_url = ? WHERE id = ?",
+            (tenant_id, str(new_path), new_url, row["id"]),
+        )
+        cur.execute(
+            "UPDATE product_image_embeddings SET tenant_id = ?, image_path = ?, image_url = ? WHERE tenant_id = 0 AND candidate_id = ?",
+            (tenant_id, str(new_path), new_url, row["id"]),
+        )
+
+    cur.execute(
+        """
+        UPDATE visual_stock_batches
+        SET tenant_id = ?, created_by = ?, source = 'onboarding_upload'
+        WHERE id = ? AND tenant_id = 0
+        """,
+        (tenant_id, user_id, batch_id),
+    )
+    conn.commit()
+    conn.close()
+    claimed = list_batch_candidates(batch_id, tenant_id)
+    return {"basari": True, "batch_id": batch_id, "candidate_count": len(claimed), "candidates": claimed}
+
+
 def approve_candidate(candidate_id: int, tenant_id: int, payload: dict) -> dict:
     conn = get_connection()
     cur = conn.cursor()

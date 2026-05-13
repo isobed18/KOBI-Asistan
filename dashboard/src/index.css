@@ -3231,6 +3231,13 @@ select option { background: var(--surface); }
   align-items: center;
   margin-top: 16px;
 }
+.setup-actions-row-inline {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+.setup-actions-row-center {
+  justify-content: center;
+}
 .setup-message { color: var(--text2); }
 .setup-candidates {
   display: grid;

@@ -3,10 +3,12 @@ import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   approveVisualCandidate,
+  claimVisualStockBatch,
   duplicateVisualCandidate,
   loginUser,
   registerTenantSetup,
   rejectVisualCandidate,
+  uploadVisualStockSetupBatch,
   uploadVisualStockBatch,
 } from '../api.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -82,9 +84,9 @@ function WizardProgress({ steps, step }) {
   )
 }
 
-function RegisterStep({ businessType, setBusinessType, onCreated }) {
+function RegisterStep({ businessType, setBusinessType, onContinue, initialForm }) {
   const suffix = useMemo(uniqueDemoSuffix, [])
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(initialForm || {
     business_name: `Yeni Butik ${suffix.slice(-2)}`,
     owner_name: 'Mina Yılmaz',
     username: `butik_${suffix}`,
@@ -92,24 +94,22 @@ function RegisterStep({ businessType, setBusinessType, onCreated }) {
     owner_notes: 'Modern, sade ve güven veren bir butik. Genç profesyonellere rahat ama şık kombinler öneriyoruz.',
     communication_rules: 'Müşteriye her zaman nazik ve sakin hitap et.\nEmoji kullanma.\nBeden konusunda emin değilsen ölçü iste.\nStok yoksa alternatif ürün öner.',
   })
-  const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState('')
 
   const set = (key, value) => setForm(prev => ({ ...prev, [key]: value }))
 
   const submit = async (event) => {
     event.preventDefault()
-    setLoading(true)
     setMsg('')
-    try {
-      const res = await registerTenantSetup({ ...form, business_type: businessType })
-      const auth = await loginUser(form.username.trim().toLowerCase(), form.password)
-      onCreated?.(res, auth)
-    } catch (e) {
-      setMsg(e.message)
-    } finally {
-      setLoading(false)
+    if (form.username.trim().length < 3) {
+      setMsg('Kullanıcı adı en az 3 karakter olmalı.')
+      return
     }
+    if (form.password.length < 6) {
+      setMsg('Şifre en az 6 karakter olmalı.')
+      return
+    }
+    onContinue?.({ ...form, username: form.username.trim().toLowerCase() })
   }
 
   return (
@@ -148,22 +148,22 @@ function RegisterStep({ businessType, setBusinessType, onCreated }) {
               >
                 <strong>{type.title}</strong>
                 <span>{type.subtitle}</span>
-                {type.active && <em>Video için seçeceğiz</em>}
+                {type.active && <em>Görsel arama aktif</em>}
               </button>
             ))}
           </div>
         </div>
 
         <div className="setup-panel">
-          <h2>Demo prompt burada dursun</h2>
+          <h2>Müşteri asistanı notları</h2>
           <Field label="KOBİ kendini nasıl tanımlar?" hint="Bu metin tenant config içine KOBİ notu olarak yazılır.">
             <textarea rows={6} value={form.owner_notes} onChange={e => set('owner_notes', e.target.value)} />
           </Field>
           <Field label="Müşteri iletişim kuralları" hint="Her satır agent prompt'una kural olarak eklenir.">
             <textarea rows={7} value={form.communication_rules} onChange={e => set('communication_rules', e.target.value)} />
           </Field>
-          <button className="btn btn-primary setup-primary-action" type="submit" disabled={loading}>
-            {loading ? 'Hesap oluşturuluyor...' : 'Hesabı oluştur ve ürün yüklemeye geç'}
+          <button className="btn btn-primary setup-primary-action" type="submit">
+            Devam et
           </button>
           {msg && <span className="setup-message setup-message-error">{msg}</span>}
         </div>
@@ -176,7 +176,7 @@ function DemoFileGuide() {
   return (
     <div className="setup-demo-files">
       <div>
-        <h3>Demo için yüklenecek örnekler</h3>
+        <h3>Örnek ürün fotoğrafları</h3>
         <p>Bu klasörden 6-8 temiz moda ürünü seçin, tek seferde sürükleyip bırakın.</p>
         <code>{DEMO_DIR}</code>
       </div>
@@ -187,7 +187,7 @@ function DemoFileGuide() {
   )
 }
 
-function UploadStep({ businessType, files, previews, dragging, setDragging, pickFiles, inputRef, upload, busy, message, onSkip }) {
+function UploadStep({ businessType, files, previews, dragging, setDragging, pickFiles, inputRef, upload, busy, message, onBack, onSkip }) {
   return (
     <motion.section className="setup-screen" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38 }}>
       <div className="setup-screen-intro">
@@ -209,7 +209,7 @@ function UploadStep({ businessType, files, previews, dragging, setDragging, pick
         >
           <input ref={inputRef} type="file" multiple accept="image/*" onChange={e => pickFiles(e.target.files)} hidden />
           <strong>Ürün fotoğraflarını buraya bırakın</strong>
-          <span>veya Polyvore demo klasöründen seçmek için tıklayın</span>
+          <span>veya Polyvore örnek klasöründen seçmek için tıklayın</span>
         </div>
         {previews.length > 0 && (
           <div className="upload-preview-grid">
@@ -219,6 +219,7 @@ function UploadStep({ businessType, files, previews, dragging, setDragging, pick
           </div>
         )}
         <div className="setup-actions-row">
+          {onBack && <button className="btn" type="button" onClick={onBack}>Geri</button>}
           <button className="btn btn-primary" type="button" onClick={upload} disabled={busy || !files.length}>
             {busy ? 'Sınıflandırılıyor...' : 'Görselleri sınıflandır'}
           </button>
@@ -277,16 +278,19 @@ function CandidateCard({ candidate, draft, onChange, onApprove, onReject, onDupl
   )
 }
 
-function ReviewStep({ batch, drafts, setCandidateDraft, approve, reject, duplicate, busy, message, onDone }) {
+function ReviewStep({ batch, drafts, setCandidateDraft, approve, reject, duplicate, busy, message, onBack, onDone }) {
   return (
     <motion.section className="setup-screen setup-screen-review" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.38 }}>
       <div className="setup-screen-intro setup-screen-intro-row">
         <div>
           <span className="setup-eyebrow">Katalog onayı</span>
           <h1>Bulunan ürünleri tek tek netleştirin.</h1>
-          <p>Fiyat, stok ve beden rehberini doldurun. Varyant oluştur butonu aynı görselden farklı beden/renk kayıtlarını hızlıca açar.</p>
+          <p>Fiyat, stok ve beden rehberini doldurun. Varyant oluştur butonu aynı görselden farklı beden/renk kayıtlarını hızlıca hazırlar.</p>
         </div>
-        <button className="btn btn-primary" type="button" onClick={onDone}>Kurulumu bitir</button>
+        <div className="setup-actions-row setup-actions-row-inline">
+          {onBack && <button className="btn" type="button" onClick={onBack}>Geri</button>}
+          <button className="btn btn-primary" type="button" onClick={onDone}>Kurulumu tamamla</button>
+        </div>
       </div>
       {message && <span className="setup-message">{message}</span>}
       <div className="setup-candidates">
@@ -307,21 +311,25 @@ function ReviewStep({ batch, drafts, setCandidateDraft, approve, reject, duplica
   )
 }
 
-function DoneStep({ createdTenant }) {
+function DoneStep({ createdTenant, onBack, busy, message }) {
   const navigate = useNavigate()
   return (
     <motion.section className="setup-screen setup-screen-done" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.42 }}>
       <div className="setup-done-card">
         <span className="setup-eyebrow">Kurulum hazır</span>
         <h1>{createdTenant?.business_name || 'İşletmeniz'} için asistan çalışmaya hazır.</h1>
-        <p>Şimdi günün özetine geçebilirsiniz. Demo videosunda buradan dolu demo hesaba geçip sipariş, stok, kargo, rapor ve müdahale akışlarını göstereceğiz.</p>
+        <p>Hesap, işletme kuralları ve katalog adayları hazırlandı. Onaylanan ürünler stoğa eklendi; müşteri asistanı görsel arama, beden sorusu, sipariş akışı ve kritik iptal müdahalesi için bu bilgileri kullanacak.</p>
         <div className="telegram-script-grid">
           <div><strong>Görsel arama</strong><p>Müşteri ürün fotoğrafı gönderir, sistem katalogdan benzeri bulur.</p></div>
           <div><strong>Beden sorusu</strong><p>Ürün beden rehberi varsa LLM ürüne göre cevap verir.</p></div>
           <div><strong>Sipariş akışı</strong><p>Butonlu intent akışı LLM olmadan siparişe ilerler.</p></div>
           <div><strong>İptal talebi</strong><p>OTP sonrası yönetici müdahalesine ticket düşer.</p></div>
         </div>
-        <button className="btn btn-primary setup-primary-action" type="button" onClick={() => navigate('/')}>Günün özetine geç</button>
+        {message && <span className="setup-message">{message}</span>}
+        <div className="setup-actions-row setup-actions-row-center">
+          {onBack && <button className="btn" type="button" onClick={onBack} disabled={busy}>Geri</button>}
+          <button className="btn btn-primary setup-primary-action" type="button" onClick={() => navigate('/')} disabled={busy}>Günün özetine geç</button>
+        </div>
       </div>
     </motion.section>
   )
@@ -338,6 +346,7 @@ export default function Onboarding({ publicMode = false }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [createdTenant, setCreatedTenant] = useState(null)
+  const [accountForm, setAccountForm] = useState(null)
   const [step, setStep] = useState(publicMode ? 'account' : 'upload')
 
   const steps = publicMode
@@ -354,7 +363,7 @@ export default function Onboarding({ publicMode = false }) {
       ]
 
   const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files])
-  const canUpload = isAuthenticated
+  const canUpload = isAuthenticated || publicMode
 
   const setCandidateDraft = (id, key, value) => setDrafts(prev => ({ ...prev, [id]: { ...prev[id], [key]: value } }))
 
@@ -364,10 +373,9 @@ export default function Onboarding({ publicMode = false }) {
     setMessage(imageFiles.length ? `${imageFiles.length} görsel hazır.` : 'Sadece görsel dosyaları kabul edilir.')
   }
 
-  const handleCreated = (tenant, auth) => {
-    login(auth.access_token, auth.user)
-    setCreatedTenant(tenant)
-    setMessage(`${tenant.business_name} hesabı oluşturuldu. Şimdi ürün fotoğraflarını yükleyebilirsiniz.`)
+  const handleAccountReady = (form) => {
+    setAccountForm(form)
+    setMessage('Hesap bilgileri kaydedildi. Hesap, kurulum tamamlandığında oluşturulacak.')
     setStep('upload')
   }
 
@@ -383,7 +391,9 @@ export default function Onboarding({ publicMode = false }) {
     setBusy(true)
     setMessage('FashionCLIP görselleri sınıflandırıyor...')
     try {
-      const res = await uploadVisualStockBatch({ businessType, files })
+      const res = await (publicMode
+        ? uploadVisualStockSetupBatch({ businessType, files })
+        : uploadVisualStockBatch({ businessType, files }))
       setBatch(res)
       const nextDrafts = {}
       for (const c of res.candidates || []) nextDrafts[c.id] = seedDraft(c)
@@ -408,6 +418,11 @@ export default function Onboarding({ publicMode = false }) {
   }
 
   const approve = async (candidate) => {
+    if (publicMode) {
+      setBatch(prev => ({ ...prev, candidates: prev.candidates.map(c => c.id === candidate.id ? { ...c, status: 'approved' } : c) }))
+      setMessage(`${drafts[candidate.id].name || 'Ürün adayı'} kurulumda onaylandı. Hesap tamamlanınca stoğa eklenecek.`)
+      return
+    }
     setBusy(true)
     try {
       await approveVisualCandidate(candidate.id, payloadFor(candidate))
@@ -423,9 +438,30 @@ export default function Onboarding({ publicMode = false }) {
   const duplicate = async (candidate) => {
     const base = payloadFor(candidate)
     const suffix = window.prompt('Varyant adı / beden etiketi', 'M beden') || 'Varyant'
+    const variantPayload = {
+      ...base,
+      name: `${base.name} - ${suffix}`,
+      description: `${base.description || ''}\nSize: ${suffix}`.trim(),
+      size_guide: `${base.size_guide || ''}\nVaryant: ${suffix}`.trim(),
+    }
+    if (publicMode) {
+      const variantId = `variant-${candidate.id}-${Date.now()}`
+      const variant = {
+        ...candidate,
+        id: variantId,
+        base_candidate_id: candidate.base_candidate_id || candidate.id,
+        status: 'approved',
+        suggested_name: variantPayload.name,
+        is_variant: true,
+      }
+      setBatch(prev => ({ ...prev, candidates: [...(prev?.candidates || []), variant] }))
+      setDrafts(prev => ({ ...prev, [variantId]: variantPayload }))
+      setMessage(`${base.name} için ${suffix} varyantı kurulum listesine eklendi.`)
+      return
+    }
     setBusy(true)
     try {
-      await duplicateVisualCandidate(candidate.id, { ...base, name: `${base.name} - ${suffix}` })
+      await duplicateVisualCandidate(candidate.id, variantPayload)
       setMessage(`${base.name} için ${suffix} varyantı kataloğa eklendi.`)
     } catch (e) {
       setMessage(e.message)
@@ -435,11 +471,59 @@ export default function Onboarding({ publicMode = false }) {
   }
 
   const reject = async (candidate) => {
+    if (publicMode) {
+      setBatch(prev => ({ ...prev, candidates: prev.candidates.map(c => c.id === candidate.id ? { ...c, status: 'rejected' } : c) }))
+      setMessage(`${drafts[candidate.id]?.name || 'Ürün adayı'} kurulum listesinden çıkarıldı.`)
+      return
+    }
     setBusy(true)
     try {
       await rejectVisualCandidate(candidate.id, 'Kurulum incelemesinde reddedildi')
       setBatch(prev => ({ ...prev, candidates: prev.candidates.map(c => c.id === candidate.id ? { ...c, status: 'rejected' } : c) }))
       setMessage(`${drafts[candidate.id]?.name || 'Ürün adayı'} reddedildi.`)
+    } catch (e) {
+      setMessage(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const completeSetup = async () => {
+    if (!publicMode) {
+      setStep('done')
+      return
+    }
+    if (createdTenant) {
+      setStep('done')
+      return
+    }
+    if (!accountForm) {
+      setMessage('Önce hesap bilgilerini tamamlayın.')
+      setStep('account')
+      return
+    }
+    setBusy(true)
+    setMessage('Hesap oluşturuluyor ve onaylanan ürünler stoğa ekleniyor...')
+    try {
+      const tenant = await registerTenantSetup({ ...accountForm, business_type: businessType })
+      const auth = await loginUser(accountForm.username.trim().toLowerCase(), accountForm.password)
+      login(auth.access_token, auth.user)
+      setCreatedTenant(tenant)
+
+      if (batch?.batch_id) {
+        await claimVisualStockBatch(batch.batch_id)
+        const approved = (batch.candidates || []).filter(c => c.status === 'approved')
+        for (const candidate of approved) {
+          const payload = payloadFor(candidate)
+          if (candidate.is_variant) {
+            await duplicateVisualCandidate(candidate.base_candidate_id, payload)
+          } else {
+            await approveVisualCandidate(candidate.id, payload)
+          }
+        }
+      }
+      setMessage(`${tenant.business_name} hesabı hazır. Onaylanan ürünler kataloğa eklendi.`)
+      setStep('done')
     } catch (e) {
       setMessage(e.message)
     } finally {
@@ -455,7 +539,8 @@ export default function Onboarding({ publicMode = false }) {
         <RegisterStep
           businessType={businessType}
           setBusinessType={setBusinessType}
-          onCreated={handleCreated}
+          initialForm={accountForm}
+          onContinue={handleAccountReady}
         />
       )}
 
@@ -471,7 +556,8 @@ export default function Onboarding({ publicMode = false }) {
           upload={upload}
           busy={busy}
           message={message}
-          onSkip={() => setStep('done')}
+          onBack={publicMode ? () => setStep('account') : null}
+          onSkip={completeSetup}
         />
       )}
 
@@ -485,11 +571,12 @@ export default function Onboarding({ publicMode = false }) {
           duplicate={duplicate}
           busy={busy}
           message={message}
-          onDone={() => setStep('done')}
+          onBack={() => setStep('upload')}
+          onDone={completeSetup}
         />
       )}
 
-      {step === 'done' && <DoneStep createdTenant={createdTenant} />}
+      {step === 'done' && <DoneStep createdTenant={createdTenant} busy={busy} message={message} onBack={batch?.candidates?.length ? () => setStep('review') : () => setStep('upload')} />}
     </div>
   )
 }

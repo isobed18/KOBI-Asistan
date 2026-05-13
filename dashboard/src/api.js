@@ -147,7 +147,15 @@ export const uploadVisualStockBatch = ({ businessType = 'giyim', files = [] }) =
   files.forEach(file => fd.append('files', file))
   return reqForm('/visual-stock/batches', fd)
 }
+export const uploadVisualStockSetupBatch = ({ businessType = 'giyim', files = [] }) => {
+  const fd = new FormData()
+  fd.append('business_type', businessType)
+  files.forEach(file => fd.append('files', file))
+  return reqForm('/visual-stock/setup/batches', fd)
+}
 export const getVisualStockBatch = (batchId) => req(`/visual-stock/batches/${batchId}`)
+export const claimVisualStockBatch = (batchId) =>
+  req(`/visual-stock/batches/${batchId}/claim`, { method: 'POST' })
 export const approveVisualCandidate = (candidateId, body) =>
   req(`/visual-stock/candidates/${candidateId}/approve`, { method: 'POST', body: JSON.stringify(body) })
 export const rejectVisualCandidate = (candidateId, reason = '') =>
