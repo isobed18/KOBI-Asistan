@@ -29,7 +29,7 @@ async function reqForm(path, formData, options = {}) {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || 'Istek basarisiz')
+    throw new Error(err.detail || 'İstek başarısız')
   }
   return res.json()
 }

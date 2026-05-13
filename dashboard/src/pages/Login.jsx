@@ -28,15 +28,15 @@ export default function Login() {
         body: body.toString(),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Giris basarisiz' }))
-        setError(err.detail || 'Giris basarisiz')
+        const err = await res.json().catch(() => ({ detail: 'Giriş başarısız' }))
+        setError(err.detail || 'Giriş başarısız')
         return
       }
       const data = await res.json()
       login(data.access_token, data.user)
       navigate(from, { replace: true })
     } catch {
-      setError('Sunucuya baglanilamadi.')
+      setError('Sunucuya bağlanılamadı.')
     } finally {
       setLoading(false)
     }
@@ -52,13 +52,13 @@ export default function Login() {
       >
         <div className="login-logo calm-login-logo">
           <span className="calm-login-orb" />
-          <h1>Isiniz izleniyor.</h1>
-          <p>Onemli kararlar icin giris yapin.</p>
+          <h1>İşiniz izleniyor.</h1>
+          <p>Önemli kararlar için giriş yapın.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label className="form-label">Kullanici adi</label>
+            <label className="form-label">Kullanıcı adı</label>
             <input
               className="form-control"
               type="text"
@@ -70,7 +70,7 @@ export default function Login() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Sifre</label>
+            <label className="form-label">Şifre</label>
             <input
               className="form-control"
               type="password"
@@ -82,7 +82,7 @@ export default function Login() {
           </div>
           {error && <div className="login-error">{error}</div>}
           <button type="submit" className="btn btn-primary calm-login-button" disabled={loading || !username || !password}>
-            {loading ? 'Hazirlaniyor...' : 'Devam et'}
+            {loading ? 'Hazırlanıyor...' : 'Devam et'}
           </button>
         </form>
       </motion.div>

@@ -267,8 +267,8 @@ export default function Layout({ children }) {
               type="button"
               className="theme-toggle"
               onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
-              title={theme === 'dark' ? 'Aydinlik temaya gec' : 'Karanlik temaya gec'}
-              aria-label={theme === 'dark' ? 'Aydinlik temaya gec' : 'Karanlik temaya gec'}
+              title={theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç'}
+              aria-label={theme === 'dark' ? 'Aydınlık temaya geç' : 'Karanlık temaya geç'}
             >
               <span className={`theme-toggle-slot${theme === 'light' ? ' active' : ''}`} aria-hidden>
                 <IconSun />

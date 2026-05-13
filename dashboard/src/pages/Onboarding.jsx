@@ -9,19 +9,19 @@ import {
 const BUSINESS_TYPES = [
   {
     id: 'giyim',
-    title: 'Clothing / boutique',
-    subtitle: 'FashionCLIP image search, size guidance, outfit-style answers.',
+    title: 'Giyim / butik',
+    subtitle: 'FashionCLIP ile görsel ürün arama, beden rehberi ve stil odaklı müşteri cevapları.',
     active: true,
   },
   {
     id: 'gida',
-    title: 'Food / packaged goods',
-    subtitle: 'Allergen-aware product answers and ingredient guidance.',
+    title: 'Gıda / paketli ürün',
+    subtitle: 'İçerik ve alerjen bilgisine göre güvenli ürün danışmanlığı.',
   },
   {
     id: 'cicek',
-    title: 'Flowers / gifts',
-    subtitle: 'Occasion suggestions and visual bouquet matching.',
+    title: 'Çiçek / hediye',
+    subtitle: 'Özel gün önerileri ve görsel buket eşleştirme akışı.',
   },
 ]
 
@@ -68,8 +68,8 @@ function DemoFileGuide() {
   return (
     <div className="setup-demo-files">
       <div>
-        <h3>Demo icin yuklenecek ornekler</h3>
-        <p>Bu klasorden 6-8 temiz moda urunu secin, tek seferde surukleyip birakin.</p>
+        <h3>Demo için yüklenecek örnekler</h3>
+        <p>Bu klasörden 6-8 temiz moda ürünü seçin, tek seferde sürükleyip bırakın.</p>
         <code>{DEMO_DIR}</code>
       </div>
       <div className="setup-file-list">
@@ -90,45 +90,45 @@ function CandidateCard({ candidate, draft, onChange, onApprove, onReject, busy }
       transition={{ duration: 0.28 }}
     >
       <div className="setup-candidate-image">
-        {imageSrc ? <img src={imageSrc} alt={draft.name || 'Product candidate'} /> : <span>Image</span>}
+        {imageSrc ? <img src={imageSrc} alt={draft.name || 'Ürün adayı'} /> : <span>Görsel</span>}
       </div>
       <div className="setup-candidate-body">
         <div className="setup-candidate-top">
           <div>
             <div className="setup-candidate-kicker">{candidate.classifier}</div>
-            <h3>{draft.name || 'Unnamed product'}</h3>
+            <h3>{draft.name || 'İsimsiz ürün'}</h3>
           </div>
           <span className="setup-confidence">{confidence}%</span>
         </div>
         <div className="setup-form-grid">
-          <Field label="Product name">
+          <Field label="Ürün adı">
             <input value={draft.name} onChange={e => onChange('name', e.target.value)} />
           </Field>
-          <Field label="Category">
+          <Field label="Kategori">
             <input value={draft.category} onChange={e => onChange('category', e.target.value)} />
           </Field>
-          <Field label="Price">
+          <Field label="Fiyat">
             <input type="number" min="0" value={draft.price} onChange={e => onChange('price', e.target.value)} placeholder="899" />
           </Field>
-          <Field label="Stock">
+          <Field label="Stok">
             <input type="number" min="0" value={draft.stock_quantity} onChange={e => onChange('stock_quantity', e.target.value)} />
           </Field>
         </div>
-        <Field label="Description" hint="Demo: fabric, fit, style, suitable season. Customer questions will use this context.">
+        <Field label="Ürün açıklaması" hint="Örnek: kumaş, kalıp, stil, sezon ve kullanım alanı. Müşteri sorularında bu bilgiler kullanılır.">
           <textarea value={draft.description} onChange={e => onChange('description', e.target.value)} rows={3} />
         </Field>
-        <Field label="Size guide" hint="Example: S 34-36, M 38-40, L 42-44. This powers 'which size fits me?' answers.">
-          <textarea value={draft.size_guide} onChange={e => onChange('size_guide', e.target.value)} rows={2} placeholder="S: 34-36, M: 38-40, L: 42-44. Oversize fit." />
+        <Field label="Beden rehberi" hint="Örnek: S 34-36, M 38-40, L 42-44. Müşteri 'hangi beden olur?' diye sorduğunda buradan cevap verilir.">
+          <textarea value={draft.size_guide} onChange={e => onChange('size_guide', e.target.value)} rows={2} placeholder="S: 34-36, M: 38-40, L: 42-44. Kalıp rahat; aradaysanız bir beden büyük seçin." />
         </Field>
-        <Field label="Visual keywords">
+        <Field label="Görsel anahtar kelimeler">
           <input value={draft.visual_keywords} onChange={e => onChange('visual_keywords', e.target.value)} />
         </Field>
         <div className="setup-candidate-actions">
           <button className="btn btn-sm" type="button" disabled={busy || candidate.status === 'rejected'} onClick={onReject}>
-            Reject
+            Reddet
           </button>
           <button className="btn btn-primary btn-sm" type="button" disabled={busy || candidate.status === 'approved'} onClick={onApprove}>
-            {candidate.status === 'approved' ? 'Approved' : 'Approve product'}
+            {candidate.status === 'approved' ? 'Onaylandı' : 'Ürünü onayla'}
           </button>
         </div>
       </div>
@@ -158,23 +158,23 @@ export default function Onboarding() {
   const pickFiles = (list) => {
     const imageFiles = Array.from(list || []).filter(file => file.type.startsWith('image/'))
     setFiles(imageFiles)
-    setMessage(imageFiles.length ? `${imageFiles.length} image ready.` : 'Only image files are accepted.')
+    setMessage(imageFiles.length ? `${imageFiles.length} görsel hazır.` : 'Sadece görsel dosyaları kabul edilir.')
   }
 
   const upload = async () => {
     if (!files.length) {
-      setMessage('Add product images first.')
+      setMessage('Önce ürün görsellerini ekleyin.')
       return
     }
     setBusy(true)
-    setMessage('FashionCLIP is classifying the images...')
+    setMessage('FashionCLIP görselleri sınıflandırıyor...')
     try {
       const res = await uploadVisualStockBatch({ businessType, files })
       setBatch(res)
       const nextDrafts = {}
       for (const c of res.candidates || []) nextDrafts[c.id] = seedDraft(c)
       setDrafts(nextDrafts)
-      setMessage(`${res.candidate_count} candidates created. Review, edit, approve.`)
+      setMessage(`${res.candidate_count} ürün adayı oluşturuldu. Düzenleyip onaylayabilirsiniz.`)
     } catch (e) {
       setMessage(e.message)
     } finally {
@@ -196,7 +196,7 @@ export default function Onboarding() {
         ...prev,
         candidates: prev.candidates.map(c => c.id === candidate.id ? { ...c, status: 'approved' } : c),
       }))
-      setMessage(`${draft.name} added to catalog.`)
+      setMessage(`${draft.name} kataloğa eklendi.`)
     } catch (e) {
       setMessage(e.message)
     } finally {
@@ -207,12 +207,12 @@ export default function Onboarding() {
   const reject = async (candidate) => {
     setBusy(true)
     try {
-      await rejectVisualCandidate(candidate.id, 'Demo review rejected')
+      await rejectVisualCandidate(candidate.id, 'Demo incelemesinde reddedildi')
       setBatch(prev => ({
         ...prev,
         candidates: prev.candidates.map(c => c.id === candidate.id ? { ...c, status: 'rejected' } : c),
       }))
-      setMessage(`${drafts[candidate.id]?.name || 'Candidate'} rejected.`)
+      setMessage(`${drafts[candidate.id]?.name || 'Ürün adayı'} reddedildi.`)
     } catch (e) {
       setMessage(e.message)
     } finally {
@@ -229,19 +229,19 @@ export default function Onboarding() {
         transition={{ duration: 0.42 }}
       >
         <div>
-          <span className="setup-eyebrow">Demo onboarding</span>
-          <h1>Your store learns the catalog before the first customer asks.</h1>
+          <span className="setup-eyebrow">Demo kurulumu</span>
+          <h1>Mağazanız, ilk müşteri yazmadan önce kataloğu öğrenir.</h1>
           <p>
-            Choose the business type, upload product photos, let FashionCLIP draft the catalog,
-            then approve products with size and product guidance for Telegram.
+            İşletme türünü seçin, ürün fotoğraflarını yükleyin, FashionCLIP kataloğu taslak olarak hazırlasın.
+            Siz yalnızca ürünleri kontrol edip onaylayın.
           </p>
         </div>
         <div className="setup-flow">
-          <span>Login</span>
-          <span>Business type</span>
-          <span>Upload photos</span>
-          <span>Review catalog</span>
-          <span>Telegram search</span>
+          <span>Giriş</span>
+          <span>İşletme türü</span>
+          <span>Fotoğraf yükleme</span>
+          <span>Katalog onayı</span>
+          <span>Telegram görsel arama</span>
         </div>
       </motion.section>
 
@@ -249,9 +249,9 @@ export default function Onboarding() {
         <div className="setup-section-head">
           <div>
             <span className="setup-step">1</span>
-            <h2>Select business type</h2>
+            <h2>İşletme türünü seçin</h2>
           </div>
-          <p>For the video we use clothing, because visual search and size guidance are immediately obvious.</p>
+          <p>Videoda giyim işletmesini göstereceğiz; görsel arama ve beden soruları bu senaryoda çok net anlaşılıyor.</p>
         </div>
         <div className="business-type-grid">
           {BUSINESS_TYPES.map(type => (
@@ -263,7 +263,7 @@ export default function Onboarding() {
             >
               <strong>{type.title}</strong>
               <span>{type.subtitle}</span>
-              {type.active && <em>Recommended for demo</em>}
+              {type.active && <em>Demo için önerilen</em>}
             </button>
           ))}
         </div>
@@ -273,9 +273,9 @@ export default function Onboarding() {
         <div className="setup-section-head">
           <div>
             <span className="setup-step">2</span>
-            <h2>Upload product photos</h2>
+            <h2>Ürün fotoğraflarını yükleyin</h2>
           </div>
-          <p>Drop all photos at once. The system creates product candidates with name, category, keywords and confidence.</p>
+          <p>Tüm fotoğrafları tek seferde bırakın. Sistem ürün adı, kategori, anahtar kelime ve güven skorunu çıkarır.</p>
         </div>
         <DemoFileGuide />
         <div
@@ -295,8 +295,8 @@ export default function Onboarding() {
             onChange={e => pickFiles(e.target.files)}
             hidden
           />
-          <strong>Drop product photos here</strong>
-          <span>or click to select from the Polyvore demo folder</span>
+          <strong>Ürün fotoğraflarını buraya bırakın</strong>
+          <span>veya Polyvore demo klasöründen seçmek için tıklayın</span>
         </div>
         {previews.length > 0 && (
           <div className="upload-preview-grid">
@@ -310,7 +310,7 @@ export default function Onboarding() {
         )}
         <div className="setup-actions-row">
           <button className="btn btn-primary" type="button" onClick={upload} disabled={busy || !files.length}>
-            {busy ? 'Classifying...' : 'Classify images'}
+            {busy ? 'Sınıflandırılıyor...' : 'Görselleri sınıflandır'}
           </button>
           {message && <span className="setup-message">{message}</span>}
         </div>
@@ -321,9 +321,9 @@ export default function Onboarding() {
           <div className="setup-section-head">
             <div>
               <span className="setup-step">3</span>
-              <h2>Review generated catalog</h2>
+              <h2>Oluşturulan kataloğu kontrol edin</h2>
             </div>
-            <p>Fill price, stock and size guide. Customer visual search and size questions use this catalog data.</p>
+            <p>Fiyat, stok ve beden rehberini doldurun. Müşterinin görsel araması ve beden soruları bu veriyi kullanır.</p>
           </div>
           <div className="setup-candidates">
             {batch.candidates.map(candidate => (
@@ -345,26 +345,26 @@ export default function Onboarding() {
         <div className="setup-section-head">
           <div>
             <span className="setup-step">4</span>
-            <h2>Customer Telegram demo</h2>
+            <h2>Telegram müşteri demosu</h2>
           </div>
-          <p>After approval, the customer sends a product image. CLIP finds the catalog item; ordering continues with buttons, without LLM cost.</p>
+          <p>Onaydan sonra müşteri ürün görseli gönderir. CLIP katalogdaki ürünü bulur; sipariş akışı butonlarla ve LLM maliyeti olmadan devam eder.</p>
         </div>
         <div className="telegram-script-grid">
           <div>
-            <strong>Customer sends</strong>
-            <p>Photo of sandals / bag / jeans</p>
+            <strong>Müşteri gönderir</strong>
+            <p>Sandalet / çanta / jean fotoğrafı</p>
           </div>
           <div>
-            <strong>Bot replies</strong>
-            <p>“I found this product: Beige Crystal Sandals, 899 TL, stock 12. Is this the item you want?”</p>
+            <strong>Bot cevaplar</strong>
+            <p>“Bu ürünü buldum: Beige Crystal Sandals, 899 TL, stok 12. Bunu mu istiyorsunuz?”</p>
           </div>
           <div>
-            <strong>Buttons</strong>
-            <p>Add to cart · Product list · Main menu</p>
+            <strong>Butonlar</strong>
+            <p>Sepete ekle · Ürün listesi · Ana menü</p>
           </div>
           <div>
-            <strong>Size question</strong>
-            <p>“Which size fits me?” uses the product size guide saved during review.</p>
+            <strong>Beden sorusu</strong>
+            <p>“Hangi beden bana olur?” sorusu, ürün onayında kaydedilen beden rehberinden cevaplanır.</p>
           </div>
         </div>
       </section>

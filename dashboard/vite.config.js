@@ -13,6 +13,7 @@ export default defineConfig({
       '/tickets': { target: 'http://localhost:8000', changeOrigin: true },
       '/reports': { target: 'http://localhost:8000', changeOrigin: true },
       '/auth':    { target: 'http://localhost:8000', changeOrigin: true },
+      '/visual-stock': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
   build: {
