@@ -34,6 +34,20 @@ async function reqForm(path, formData, options = {}) {
   return res.json()
 }
 
+export async function loginUser(username, password) {
+  const body = new URLSearchParams({ username, password })
+  const res = await fetch(BASE + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Giriş başarısız' }))
+    throw new Error(err.detail || 'Giriş başarısız')
+  }
+  return res.json()
+}
+
 // Dashboard
 export const getDashboardStats = () => req('/dashboard/stats')
 export const getCargoDashboard = () => req('/dashboard/cargo')

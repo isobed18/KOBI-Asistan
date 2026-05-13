@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { loginUser } from '../api.js'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -21,22 +22,11 @@ export default function Login() {
     setError('')
 
     try {
-      const body = new URLSearchParams({ username, password })
-      const res = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Giriş başarısız' }))
-        setError(err.detail || 'Giriş başarısız')
-        return
-      }
-      const data = await res.json()
+      const data = await loginUser(username, password)
       login(data.access_token, data.user)
       navigate(from, { replace: true })
-    } catch {
-      setError('Sunucuya bağlanılamadı.')
+    } catch (e) {
+      setError(e.message || 'Sunucuya bağlanılamadı.')
     } finally {
       setLoading(false)
     }
