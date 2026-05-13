@@ -28,13 +28,16 @@ def siparis_sorgula(siparis_no: int = None, takip_kodu: str = None) -> dict:
     cursor = conn.cursor()
 
     # Takip kodu veya siparis no ile sorgula
+    tenant_id = int(get_tenant_id() or 1)
     if takip_kodu:
         order = cursor.execute(
-            "SELECT * FROM orders WHERE tracking_code = ?", (takip_kodu,)
+            "SELECT * FROM orders WHERE tracking_code = ? AND tenant_id = ?",
+            (takip_kodu, tenant_id),
         ).fetchone()
     elif siparis_no:
         order = cursor.execute(
-            "SELECT * FROM orders WHERE id = ?", (siparis_no,)
+            "SELECT * FROM orders WHERE id = ? AND tenant_id = ?",
+            (siparis_no, tenant_id),
         ).fetchone()
     else:
         conn.close()
@@ -96,13 +99,13 @@ def musteri_siparisleri() -> dict:
 
     if scope.get("telefon"):
         rows = cursor.execute(
-            "SELECT id, tracking_code, status, total_price, created_at FROM orders WHERE customer_phone = ? ORDER BY created_at DESC",
-            (scope["telefon"],)
+            "SELECT id, tracking_code, status, total_price, created_at FROM orders WHERE customer_phone = ? AND tenant_id = ? ORDER BY created_at DESC",
+            (scope["telefon"], int(get_tenant_id() or 1)),
         ).fetchall()
     elif scope.get("takip_kodu"):
         rows = cursor.execute(
-            "SELECT id, tracking_code, status, total_price, created_at FROM orders WHERE tracking_code = ?",
-            (scope["takip_kodu"],)
+            "SELECT id, tracking_code, status, total_price, created_at FROM orders WHERE tracking_code = ? AND tenant_id = ?",
+            (scope["takip_kodu"], int(get_tenant_id() or 1)),
         ).fetchall()
     else:
         conn.close()

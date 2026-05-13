@@ -60,29 +60,45 @@ ACCOUNTS = [
 ]
 
 FASHION_FILES = [
-    "pieces-leather-boot-102049118_4.jpg",
-    "topshop-moto-vintage-boyfriend-jeans-100014086_2.jpg",
+    "pieces-leather-boot-100364440_5.jpg",
+    "topshop-moto-vintage-boyfriend-jeans-100077218_8.jpg",
     "givenchy-leather-medium-antigona-duffel-black-100002074_3.jpg",
-    "vintage-pearl-feather-earrings-100560058_7.jpg",
+    "vintage-pearl-feather-earrings-100774542_6.jpg",
     "long-sleeve-simple-blouse-100445477_1.jpg",
-    "red-tartan-check-skater-skirt-100361260_2.jpg",
+    "red-tartan-check-skater-skirt-100167523_2.jpg",
     "classic-flat-shoes-100566397_3.jpg",
     "beige-crystal-sandals-100050716_2.jpg",
     "givenchy-skinny-jean-100010727_2.jpg",
     "diane-von-furstenberg-metallic-mesh-sandals-100111991_3.jpg",
+    "tailored-blazer-scalloped-100346741_2.jpg",
+    "theory-tube-crop-top-101635841_1.jpg",
+    "topshop-black-heavy-leggings-101204936_3.jpg",
+    "tory-burch-super-skinny-jean-100963093_4.jpg",
+    "miu-miu-pleated-leather-mini-skirt-102004691_3.jpg",
+    "ct-leather-low-converse-white-100099673_6.jpg",
+    "flat-blue-100740998_4.jpg",
+    "alexis-bittar-medium-bracelet-100728995_5.jpg",
 ]
 
 FASHION_PRODUCTS = [
-    ("Deri Bot - Siyah 38", "Ayakkabı", 1890, 9, "Siyah deri görünümlü şehir botu.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm. Kalıp normal."),
-    ("Vintage Boyfriend Jean - M", "Alt Giyim", 1290, 14, "Rahat kesim açık mavi boyfriend jean.", "S: 34-36, M: 38-40, L: 42. Rahat kalıp."),
-    ("Antigona Model Çanta", "Çanta", 2490, 6, "Siyah, orta boy, elde ve omuzda taşınabilir çanta.", ""),
-    ("İnci Detaylı Küpe", "Aksesuar", 690, 18, "Hafif, vintage esintili inci detaylı küpe.", ""),
-    ("Uzun Kollu Bluz - Ekru M", "Üst Giyim", 990, 11, "Sade, uzun kollu, günlük kullanıma uygun bluz.", "S: 34-36, M: 38-40, L: 42-44. Kalıp normal."),
-    ("Tartan Mini Etek - S", "Alt Giyim", 860, 8, "Kırmızı tartan desenli mini etek.", "S: bel 66-70 cm, M: 71-76 cm, L: 77-82 cm."),
-    ("Klasik Babet - Lacivert 38", "Ayakkabı", 790, 15, "Lacivert klasik düz taban babet.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm."),
-    ("Kristal Sandalet - Bej 38", "Ayakkabı", 899, 12, "Bej taş detaylı yazlık sandalet.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm. Kalıp normal."),
-    ("Skinny Jean - Koyu Mavi", "Alt Giyim", 1190, 10, "Koyu mavi dar paça jean.", "S: 34-36, M: 38-40, L: 42. Esnek kumaş."),
-    ("Metallic Sandalet - Gold 39", "Ayakkabı", 1199, 7, "Gold metalik bantlı özel gün sandaleti.", "38: 24.2 cm, 39: 24.8 cm, 40: 25.5 cm."),
+    ("Black Leather Ankle Boot - 38", "Shoes", 1890, 2, "Black leather ankle boot with low heel. City, smart casual, winter outfit.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm. Regular fit."),
+    ("Vintage Boyfriend Jeans - M", "Bottoms", 1290, 16, "Light blue vintage boyfriend jeans. Relaxed denim fit, casual street style.", "XS: 32-34, S: 34-36, M: 38-40, L: 42-44. Relaxed fit."),
+    ("Black Medium Antigona Handbag", "Bags", 2490, 5, "Structured black medium handbag, top handle and shoulder carry.", "One size. Medium bag; fits wallet, phone, small notebook."),
+    ("Pearl Feather Drop Earrings", "Accessories", 690, 20, "Vintage inspired pearl and feather drop earrings. Lightweight statement accessory.", "One size. Pierced earrings."),
+    ("Ivory Long Sleeve Simple Blouse - M", "Tops", 990, 3, "Ivory long sleeve simple blouse. Minimal office and everyday outfit top.", "XS: 32-34, S: 34-36, M: 38-40, L: 42-44, XL: 46-48. Regular fit."),
+    ("Red Tartan Check Skater Skirt - S", "Bottoms", 860, 4, "Red tartan check skater skirt with high waist. Preppy mini skirt.", "S: waist 66-70 cm, M: 71-76 cm, L: 77-82 cm. High waist."),
+    ("Navy Classic Flat Shoes - 38", "Shoes", 790, 15, "Navy classic flat shoes. Comfortable ballet flats for daily outfits.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm. Regular fit."),
+    ("Beige Crystal Sandals - 38", "Shoes", 899, 12, "Beige crystal embellished sandals. Summer occasion sandals with delicate straps.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm. Regular fit."),
+    ("Dark Blue Skinny Jeans - M", "Bottoms", 1190, 10, "Dark blue skinny jeans with stretch denim. Slim fit everyday denim.", "XS: 32-34, S: 34-36, M: 38-40, L: 42-44. Stretch fabric."),
+    ("Gold Metallic Mesh Sandals - 39", "Shoes", 1199, 6, "Gold metallic mesh sandals for evening outfits and special occasions.", "38: 24.2 cm, 39: 24.8 cm, 40: 25.5 cm. Narrow straps."),
+    ("Scalloped Tailored Blazer - M", "Outerwear", 2190, 4, "Tailored blazer with scalloped edge. Smart office jacket, clean silhouette.", "S: 34-36, M: 38-40, L: 42-44. Structured fit."),
+    ("Black Tube Crop Top - M", "Tops", 690, 18, "Black tube crop top. Minimal fitted summer top, layering piece.", "XS: 32-34, S: 34-36, M: 38-40, L: 42. Fitted."),
+    ("Black Heavy Leggings - M", "Bottoms", 740, 22, "Black heavy leggings with opaque stretch fabric. Everyday active casual bottom.", "S: 34-36, M: 38-40, L: 42-44, XL: 46-48. High stretch."),
+    ("Super Skinny Blue Jeans - S", "Bottoms", 1290, 7, "Blue super skinny jeans. Polished denim, slim ankle silhouette.", "XS: 32-34, S: 34-36, M: 38-40. Very slim fit."),
+    ("Black Pleated Leather Mini Skirt - S", "Bottoms", 1690, 3, "Black pleated leather mini skirt. Statement evening skirt with structured pleats.", "XS: waist 62-66 cm, S: 66-70 cm, M: 71-76 cm."),
+    ("White Low Converse Sneakers - 38", "Shoes", 950, 11, "White low top canvas sneakers. Casual street style everyday shoes.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm, 40: 25.5 cm."),
+    ("Blue Pointed Flat Shoes - 38", "Shoes", 820, 13, "Blue pointed flat shoes. Polished flat shoe for office and denim outfits.", "37: 23.5 cm, 38: 24.2 cm, 39: 24.8 cm. Regular fit."),
+    ("Silver Medium Bracelet", "Accessories", 560, 24, "Silver medium bracelet. Minimal jewelry accessory for daily outfits.", "One size. Medium wrist fit."),
 ]
 
 FOOD_PRODUCTS = [
@@ -216,59 +232,114 @@ def _insert_product(conn, tenant_id: int, item: tuple, image_path: Path, busines
     return pid
 
 
+def _clear_tenant_demo(conn, tenant_id: int):
+    order_ids = [
+        int(r["id"])
+        for r in conn.execute("SELECT id FROM orders WHERE tenant_id = ?", (tenant_id,)).fetchall()
+    ]
+    cargo_codes = [
+        r["cargo_tracking_code"]
+        for r in conn.execute(
+            "SELECT cargo_tracking_code FROM orders WHERE tenant_id = ? AND cargo_tracking_code IS NOT NULL",
+            (tenant_id,),
+        ).fetchall()
+        if r["cargo_tracking_code"]
+    ]
+    if order_ids:
+        marks = ",".join("?" for _ in order_ids)
+        conn.execute(f"DELETE FROM order_items WHERE order_id IN ({marks})", order_ids)
+    if cargo_codes:
+        marks = ",".join("?" for _ in cargo_codes)
+        conn.execute(f"DELETE FROM cargo_tracking WHERE tracking_code IN ({marks})", cargo_codes)
+    for table in (
+        "orders",
+        "tickets",
+        "daily_reports",
+        "tenant_daily_metrics",
+        "tenant_daily_forecasts",
+        "stock_movements",
+        "product_image_embeddings",
+        "visual_stock_candidates",
+        "visual_stock_batches",
+        "products",
+    ):
+        conn.execute(f"DELETE FROM {table} WHERE tenant_id = ?", (tenant_id,))
+    conn.commit()
+
+
 def _seed_ops(conn, tenant_id: int, product_ids: list[int], account: dict):
     rnd = random.Random(6000 + tenant_id)
-    customers = ["Ayşe Demir", "Mehmet Yıldız", "Zeynep Aydın", "Can Ergin", "Ece Şahin", "Burak Kılıç"]
+    customers = [
+        ("Ayşe Demir", "05321112233"),
+        ("Mehmet Yıldız", "05324445566"),
+        ("Zeynep Aydın", "05327778899"),
+        ("Can Ergin", "05320001122"),
+        ("Ece Şahin", "05323334455"),
+        ("Burak Kılıç", "05326667788"),
+    ]
     statuses = ["hazırlanıyor", "kargoda", "teslim_edildi", "iptal"]
-    for i in range(28):
-        day = datetime.now() - timedelta(days=rnd.randint(0, 18), hours=rnd.randint(0, 8))
-        status = rnd.choices(statuses, weights=[4, 4, 9, 1])[0]
-        pid = rnd.choice(product_ids)
+    fixed_statuses = ["hazırlanıyor", "hazırlanıyor", "kargoda", "kargoda", "teslim_edildi", "iptal"]
+    total_orders = 34 if tenant_id == 2 else 24
+    for i in range(total_orders):
+        if i < len(fixed_statuses):
+            day = datetime.now() - timedelta(hours=i + 1)
+            status = fixed_statuses[i]
+        else:
+            day = datetime.now() - timedelta(days=rnd.randint(1, 18), hours=rnd.randint(0, 8))
+            status = rnd.choices(statuses, weights=[5, 5, 10, 1])[0]
+        pid = product_ids[i % len(product_ids)] if i < len(product_ids) else rnd.choice(product_ids)
         p = conn.execute("SELECT price FROM products WHERE id=?", (pid,)).fetchone()
-        qty = rnd.randint(1, 3)
+        qty = 4 if (tenant_id == 2 and i in (0, 2)) else rnd.randint(1, 3)
         total = round(float(p["price"]) * qty, 2)
         code = f"SIP-D{tenant_id}-{i:03d}"
-        if conn.execute("SELECT 1 FROM orders WHERE tracking_code=?", (code,)).fetchone():
-            continue
         cargo = f"TRK{tenant_id}{i:04d}" if status == "kargoda" else None
+        customer_name, customer_phone = customers[i % len(customers)]
         cur = conn.execute(
             """
             INSERT INTO orders (tenant_id, tracking_code, customer_name, customer_phone, status, cargo_tracking_code, cargo_company, total_price, notes, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (tenant_id, code, rnd.choice(customers), f"05{rnd.randint(100000000, 999999999)}", status, cargo, "Yurtiçi Kargo" if cargo else None, total, "Demo sipariş", day.strftime("%Y-%m-%d %H:%M:%S"), day.strftime("%Y-%m-%d %H:%M:%S")),
+            (tenant_id, code, customer_name, customer_phone, status, cargo, "Yurtiçi Kargo" if cargo else None, total, "Demo sipariş", day.strftime("%Y-%m-%d %H:%M:%S"), day.strftime("%Y-%m-%d %H:%M:%S")),
         )
         oid = int(cur.lastrowid)
         conn.execute("INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (?, ?, ?, ?)", (oid, pid, qty, float(p["price"])))
         if cargo:
+            if tenant_id == 2 and i == 2:
+                cargo_status = "Gecikti"
+                estimated = (date.today() - timedelta(days=1)).isoformat()
+            elif tenant_id == 2 and i == 3:
+                cargo_status = "Şubede Bekliyor"
+                estimated = (date.today() - timedelta(days=2)).isoformat()
+            else:
+                cargo_status = rnd.choice(["Dağıtımda", "Transfer merkezinde"])
+                estimated = (day + timedelta(days=2)).date().isoformat()
             conn.execute(
                 "INSERT OR REPLACE INTO cargo_tracking (tracking_code, company, current_status, estimated_delivery, last_update) VALUES (?, ?, ?, ?, ?)",
-                (cargo, "Yurtiçi Kargo", rnd.choice(["Dağıtımda", "Transfer merkezinde", "Gecikme riski"]), (day + timedelta(days=2)).date().isoformat(), day.strftime("%Y-%m-%d %H:%M:%S")),
+                (cargo, "Yurtiçi Kargo", cargo_status, estimated, day.strftime("%Y-%m-%d %H:%M:%S")),
             )
     ticket_rows = [
-        ("stock_alert", "Kritik stok kontrolü", "Bazı ürünlerde stok eşiğe yaklaştı.", "high"),
-        ("cargo_delay", "Kargo gecikme riski", "Bir kargo son güncellemeden beri bekliyor.", "normal"),
+        ("stock_alert", "Kritik stok kontrolü", "Black Leather Ankle Boot, Ivory Blouse ve Pleated Mini Skirt kritik stokta.", "high"),
+        ("cargo_delay", "Kargo gecikme riski", "Bir gönderi tahmini teslim tarihini geçti; bir gönderi şubede bekliyor.", "high"),
         ("cancellation_request", "Müşteri iptal talebi", "Müşteri iptal için doğrulama sonrası inceleme istedi.", "high"),
     ]
     for typ, title, desc, pr in ticket_rows:
-        if not conn.execute("SELECT 1 FROM tickets WHERE tenant_id=? AND type=? AND title=?", (tenant_id, typ, title)).fetchone():
-            conn.execute(
-                "INSERT INTO tickets (tenant_id, type, priority, status, title, description, created_at) VALUES (?, ?, ?, 'open', ?, ?, datetime('now','localtime'))",
-                (tenant_id, typ, pr, title, desc),
-            )
-    today = date.today().isoformat()
-    if not conn.execute("SELECT 1 FROM daily_reports WHERE tenant_id=? AND date=? AND source='demo_seed'", (tenant_id, today)).fetchone():
-        briefing = {
-            "summary": f"{account['business_name']} için demo günü hazır. Açık biletler, kargolar ve stoklar kontrol altında.",
-            "tasks": [
-                {"type": "tickets", "title": "Açık müdahale kayıtlarını incele", "priority": "high"},
-                {"type": "inventory", "title": "Kritik stok ürünlerini gözden geçir", "priority": "normal"},
-            ],
-        }
         conn.execute(
-            "INSERT INTO daily_reports (tenant_id, date, report_text, raw_data, briefing_json, model_version, source) VALUES (?, ?, ?, ?, ?, 'demo', 'demo_seed')",
-            (tenant_id, today, briefing["summary"], json.dumps({"demo": True}, ensure_ascii=False), json.dumps(briefing, ensure_ascii=False)),
+            "INSERT INTO tickets (tenant_id, type, priority, status, title, description, created_at) VALUES (?, ?, ?, 'open', ?, ?, datetime('now','localtime'))",
+            (tenant_id, typ, pr, title, desc),
         )
+    today = date.today().isoformat()
+    briefing = {
+        "summary": f"{account['business_name']} için gün özeti hazır. Kritik stok, geciken kargo ve açık müdahale kayıtları var.",
+        "tasks": [
+            {"type": "tickets", "title": "Açık müdahale kayıtlarını incele", "priority": "high"},
+            {"type": "inventory", "title": "Kritik stok ürünlerini yenile", "priority": "high"},
+            {"type": "cargo", "title": "Geciken kargoları müşteriye bildir", "priority": "high"},
+        ],
+    }
+    conn.execute(
+        "INSERT INTO daily_reports (tenant_id, date, report_text, raw_data, briefing_json, model_version, source) VALUES (?, ?, ?, ?, ?, 'demo', 'demo_seed')",
+        (tenant_id, today, briefing["summary"], json.dumps({"demo": True}, ensure_ascii=False), json.dumps(briefing, ensure_ascii=False)),
+    )
     conn.commit()
     backfill_tenant_metrics(tenant_id)
 
@@ -280,12 +351,13 @@ def seed():
     try:
         for acc in ACCOUNTS:
             _write_config(acc)
+            tenant_id = acc["tenant_id"]
+            _clear_tenant_demo(conn, tenant_id)
             if not conn.execute("SELECT 1 FROM users WHERE username=?", (acc["username"],)).fetchone():
                 conn.execute(
                     "INSERT INTO users (tenant_id, username, password_hash, role, full_name) VALUES (?, ?, ?, 'admin', ?)",
                     (acc["tenant_id"], acc["username"], _hash(acc["password"]), acc["full_name"]),
                 )
-            tenant_id = acc["tenant_id"]
             if acc["business_type"] == "giyim":
                 products = FASHION_PRODUCTS
                 paths = [_copy_or_make_fashion(i, tenant_id) for i in range(len(products))]

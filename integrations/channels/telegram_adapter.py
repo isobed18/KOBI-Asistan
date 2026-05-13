@@ -2,6 +2,7 @@
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 
+from config import settings
 from integrations.channels.base import InboundMessage, OutboundMessage
 
 
@@ -15,7 +16,7 @@ class TelegramAdapter:
             channel_user_id=str(update.effective_chat.id),
             channel_message_id=str(message.message_id) if message else None,
             text=(message.text or "") if message else "",
-            tenant_id=1,
+            tenant_id=int(settings.TELEGRAM_TENANT_ID or 2),
             raw_payload=update.to_dict() if hasattr(update, "to_dict") else {},
         )
 

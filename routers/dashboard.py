@@ -136,7 +136,11 @@ def get_dashboard_stats(current_user: CurrentUser = Depends(get_current_user)):
         WHERE o.status = 'kargoda' AND o.tenant_id = ?
     """, (tenant_id,)).fetchall()
 
-    delayed = [r for r in cargo_rows if r["current_status"] in ("Şubede Bekliyor", "Gecikti", "İade Sürecinde")]
+    delayed = [
+        r for r in cargo_rows
+        if r["current_status"] in ("Şubede Bekliyor", "Gecikti", "İade Sürecinde")
+        or _is_delayed_by_eta(r["estimated_delivery"])
+    ]
 
     # Açık biletler
     ticket_stats = cursor.execute("""

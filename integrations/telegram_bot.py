@@ -6,6 +6,7 @@ import json
 import re
 import time
 from io import BytesIO
+from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 
@@ -25,9 +26,10 @@ from agent.auth import (
     validate_tracking_code,
 )
 from agent.guard import check_message
+from agent.tenant_context import set_tenant_id
 from integrations.channels.telegram_adapter import TelegramAdapter
 from config import settings
-from repositories.products import list_products, normalize_name
+from repositories.products import list_products, normalize_name, search_products
 from repositories.tickets import (
     create_ticket as repo_create_ticket,
     has_open_telegram_order_request,
@@ -35,10 +37,11 @@ from repositories.tickets import (
 from tools.order_product_tools import musteri_siparisleri, siparis_sorgula
 from services.visual_stock_ingestion import search_by_uploaded_image
 
+ROOT = Path(__file__).resolve().parents[1]
 telegram_app = None
 adapter = TelegramAdapter()
 
-TENANT_ID = 1
+TENANT_ID = int(settings.TELEGRAM_TENANT_ID or 2)
 PRODUCTS_PAGE = 5
 
 # ---------------------------------------------------------------------------
@@ -79,6 +82,7 @@ def _sess(update: Update) -> str:
 
 
 def _ud(context) -> dict:
+    set_tenant_id(TENANT_ID)
     d = context.user_data
     d.setdefault("state", S_MENU)
     d.setdefault("telefon", None)
@@ -191,6 +195,22 @@ def _fmt_visual_product(product: dict, score: float | None = None) -> str:
         lines.append(f"Not: {product['description'][:220]}")
     lines.append("\nBunu mu istiyorsunuz?")
     return "\n".join(lines)
+
+
+def _local_image_path(image_url: str | None) -> Path | None:
+    if not image_url or not image_url.startswith("/static/"):
+        return None
+    p = ROOT / image_url.lstrip("/").replace("/", "\\")
+    return p if p.exists() else None
+
+
+async def _reply_product_with_image(message, product: dict, caption: str, kb=None):
+    path = _local_image_path(product.get("image_url"))
+    if path:
+        with path.open("rb") as fh:
+            await message.reply_photo(photo=fh, caption=caption[:1024], reply_markup=kb or BACK_KB)
+        return
+    await message.reply_text(caption, reply_markup=kb or BACK_KB)
 
 
 def _ticket_desc_lines_for_cart(ud: dict) -> str:
@@ -475,6 +495,7 @@ async def _try_scope_from_message(update: Update, context, text: str) -> bool:
 
 
 async def start_command(update: Update, context):
+    set_tenant_id(TENANT_ID)
     ud = _ud(context)
     ud["state"] = S_MENU
     ud["cart"] = {}
@@ -483,10 +504,12 @@ async def start_command(update: Update, context):
 
 
 async def menu_command(update: Update, context):
+    set_tenant_id(TENANT_ID)
     await _menu_message(update, context)
 
 
 async def unified_callback(update: Update, context):
+    set_tenant_id(TENANT_ID)
     query = update.callback_query
     await query.answer()
     data = query.data or ""
@@ -639,6 +662,7 @@ async def unified_callback(update: Update, context):
 
 
 async def handle_message(update: Update, context):
+    set_tenant_id(TENANT_ID)
     text = (update.message.text or "").strip()
     ud = _ud(context)
     sess = _sess(update)
@@ -676,6 +700,22 @@ async def handle_message(update: Update, context):
         if await _try_scope_from_message(update, context, text):
             return
         if await _try_cargo_from_message(update, context, text):
+            return
+        product_matches = search_products(text, tenant_id=TENANT_ID, threshold=0.22, limit=3)
+        if product_matches and any(key in low for key in ("var", "stok", "beden", "size", "fiyat", "öner", "oner", "benzer", "ürün", "urun")):
+            product = product_matches[0]
+            ud["last_visual_product_id"] = int(product["id"])
+            kb = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton("Sepete ekle", callback_data=f"a:{product['id']}"),
+                        InlineKeyboardButton("Ürün Listesi", callback_data="m:urun_new"),
+                    ],
+                    [InlineKeyboardButton("Sepetim", callback_data="cart")],
+                ]
+            )
+            caption = _fmt_visual_product(product, product.get("match_score"))
+            await _reply_product_with_image(update.message, product, caption, kb)
             return
 
     if state == S_WAIT_ORDER_DETAIL:
@@ -905,6 +945,7 @@ async def handle_message(update: Update, context):
 
 
 async def handle_photo(update: Update, context):
+    set_tenant_id(TENANT_ID)
     ud = _ud(context)
 
     ok, msg = _rate_ok(update.effective_user.id)
@@ -960,7 +1001,7 @@ async def handle_photo(update: Update, context):
             [InlineKeyboardButton("Sepetim", callback_data="cart")],
         ]
     )
-    await update.message.reply_text(_fmt_visual_product(product, top.get("score")), reply_markup=kb)
+    await _reply_product_with_image(update.message, product, _fmt_visual_product(product, top.get("score")), kb)
 
 
 async def setup_telegram():
@@ -979,7 +1020,8 @@ async def setup_telegram():
     await telegram_app.initialize()
     await telegram_app.start()
     await telegram_app.updater.start_polling(drop_pending_updates=True)
-    print("[OK] Telegram musteri botu baslatildi.")
+    me = await telegram_app.bot.get_me()
+    print(f"[OK] Telegram musteri botu baslatildi: @{me.username} tenant={TENANT_ID}")
 
 
 async def stop_telegram():

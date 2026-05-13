@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_ADMIN_CHAT_ID: str = ""   # admin Telegram chat ID (bildirimler için)
     TELEGRAM_ENABLED: bool = True
+    TELEGRAM_TENANT_ID: int = 2        # demo müşteri botu: Mina Butik
 
     # Intent Classifier
     USE_EMBEDDING_CLASSIFIER: bool = False   # sentence-transformers ağır; demo'da False bırak
