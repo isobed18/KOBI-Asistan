@@ -31,6 +31,7 @@ from tools.order_product_tools import (
     siparis_iptal_otp_gonder,
     siparis_sorgula,
     urun_danismani,
+    urun_gorsel_ara,
     urun_stok_kontrol,
 )
 
@@ -117,6 +118,7 @@ ALL_TOOLS = [
     kritik_stok_listesi,
     gunluk_ozet,
     urun_danismani,
+    urun_gorsel_ara,
     kargo_takip,
     create_ticket,
     siparis_iptal_otp_gonder,

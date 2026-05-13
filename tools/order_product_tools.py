@@ -14,7 +14,7 @@ from database.db import get_connection
 from agent.auth import get_active_scope, check_order_access, get_customer_orders_filter
 from agent.tenant_context import get_tenant_id
 from agent.otp import create_otp_challenge, verify_otp_challenge
-from repositories.products import search_products
+from repositories.products import search_products, search_products_by_visual_description
 from repositories.tickets import create_ticket as repo_create_ticket
 
 
@@ -192,6 +192,46 @@ def urun_danismani(
         "allergens": product.get("allergens"),
         "size_guide": product.get("size_guide"),
         "advisory_notes": product.get("advisory_notes"),
+    }
+
+
+@tool
+def urun_gorsel_ara(gorsel_aciklamasi: str, kategori: str = "") -> dict:
+    """Musterinin fotografinda veya tarifinde gordugu urune benzer katalog urunlerini bulur.
+
+    Bu tool dusuk maliyetli demo/MVP yaklasimidir: gercek goruntu embedding'i yerine
+    gorselin kisa metin aciklamasi ve urunlerin visual_keywords alanini eslestirir.
+    Telegramda musteri foto attiginda vision modeli varsa once fotograf metne
+    cevrilebilir; yoksa bot musteriden kisa tarif isteyebilir.
+    """
+    rows = search_products_by_visual_description(
+        gorsel_aciklamasi,
+        tenant_id=int(get_tenant_id() or 1),
+        category=kategori or None,
+        limit=5,
+    )
+    if not rows:
+        return {
+            "sonuc": "bulunamadi",
+            "mesaj": "Bu gorsel/tarif ile eslesen urun bulamadim. Daha net renk, kalip veya kategori tarifi isteyin.",
+        }
+    return {
+        "sonuc": "bulundu",
+        "sorgu": gorsel_aciklamasi,
+        "urunler": [
+            {
+                "id": r["id"],
+                "ad": r["name"],
+                "kategori": r.get("category"),
+                "fiyat": r.get("price"),
+                "stok": r.get("stock_quantity"),
+                "gorsel": r.get("image_url"),
+                "skor": r.get("visual_match_score"),
+                "not": r.get("advisory_notes"),
+            }
+            for r in rows
+        ],
+        "maliyet_notu": "Bu arama LLM/vision maliyeti olmadan katalog anahtar kelimeleriyle yapildi.",
     }
     missing = [k for k, v in metadata.items() if not v]
     q = f"{soru} {musteri_olculeri} {alerjiler} {kullanim_amaci}".lower()

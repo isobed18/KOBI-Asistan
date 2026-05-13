@@ -78,12 +78,13 @@ def create_product(body: ProductCreate):
     cursor.execute("""
         INSERT INTO products (
             tenant_id, name, category, price, stock_quantity, low_stock_threshold,
-            description, ingredients, allergens, size_guide, advisory_notes
+            description, ingredients, allergens, size_guide, advisory_notes, image_url, visual_keywords
         )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
         get_tenant_id(), body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold,
         body.description, body.ingredients, body.allergens, body.size_guide, body.advisory_notes,
+        body.image_url, body.visual_keywords,
     ))
     product_id = cursor.lastrowid
     conn.commit()

@@ -36,6 +36,8 @@ class FeaturesConfig(BaseModel):
     dashboard_theme: str = "elegant"
     whatsapp_business: bool = False
     telegram_admin_notifications: bool = True
+    image_search: bool = False
+    product_advisory: bool = True
     faq_rag: bool = False
     report_export: bool = False
 
@@ -167,3 +169,48 @@ def tenant_prompt_block(tenant_id: int | None = 1) -> str:
 
 def dump_config_debug(tenant_id: int | None = 1) -> str:
     return json.dumps(get_tenant_by_id(tenant_id).model_dump(), ensure_ascii=False, indent=2)
+
+
+BUSINESS_TYPE_PRESETS: dict[str, dict[str, Any]] = {
+    "giyim": {
+        "label": "Giyim / Butik",
+        "features": {"image_search": True, "product_advisory": True},
+        "recommended_metadata": ["size_guide", "visual_keywords", "image_url", "advisory_notes"],
+        "agent_rules": [
+            "Beden ve kalip sorularinda urun beden tablosuna dayan.",
+            "Musteri fotograf/tarif paylasirsa gorsel benzerlik aramasini kullan.",
+            "Iki beden arasinda kalinirsa kalip notlarini ve rahatlik tercihini sor.",
+        ],
+    },
+    "gida": {
+        "label": "Gida / Yoresel Urun",
+        "features": {"image_search": False, "product_advisory": True},
+        "recommended_metadata": ["ingredients", "allergens", "advisory_notes"],
+        "agent_rules": [
+            "Alerjen ve icerik sorularinda kesin tibbi tavsiye verme.",
+            "Urun etiketi, icerik ve alerjen bilgisinden emin degilsen insan dogrulamasi oner.",
+            "Saklama ve kullanim onerilerini urun notlarina dayandir.",
+        ],
+    },
+    "cicek": {
+        "label": "Cicek / Hediye",
+        "features": {"image_search": True, "product_advisory": True},
+        "recommended_metadata": ["visual_keywords", "image_url", "advisory_notes"],
+        "agent_rules": [
+            "Musteri fotograf veya renk tarifi verirse benzer buketleri ara.",
+            "Hediye amacini sor ve stoktaki uygun urunleri oner.",
+        ],
+    },
+    "genel": {
+        "label": "Genel KOBI",
+        "features": {"image_search": False, "product_advisory": True},
+        "recommended_metadata": ["description", "advisory_notes"],
+        "agent_rules": [
+            "Urun danismanligi yaparken sadece katalog bilgisini kullan.",
+        ],
+    },
+}
+
+
+def business_type_presets() -> dict[str, dict[str, Any]]:
+    return BUSINESS_TYPE_PRESETS

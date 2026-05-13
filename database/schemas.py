@@ -15,6 +15,8 @@ class ProductBase(BaseModel):
     allergens: Optional[str] = None
     size_guide: Optional[str] = None
     advisory_notes: Optional[str] = None
+    image_url: Optional[str] = None
+    visual_keywords: Optional[str] = None
 
 class ProductCreate(ProductBase):
     pass
@@ -42,6 +44,8 @@ class ProductPatch(BaseModel):
     allergens: Optional[str] = None
     size_guide: Optional[str] = None
     advisory_notes: Optional[str] = None
+    image_url: Optional[str] = None
+    visual_keywords: Optional[str] = None
 
 #  SİPARİŞ 
 

@@ -25,6 +25,8 @@ features:
   dashboard_theme: elegant
   whatsapp_business: false
   telegram_admin_notifications: true
+  image_search: true
+  product_advisory: true
   faq_rag: false
   report_export: false
 

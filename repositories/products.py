@@ -91,7 +91,8 @@ def search_products(query: str, tenant_id: int = 1, threshold: float = 0.38, lim
     rows = conn.execute(
         """
         SELECT id, name, category, price, stock_quantity, low_stock_threshold,
-               description, ingredients, allergens, size_guide, advisory_notes
+               description, ingredients, allergens, size_guide, advisory_notes,
+               image_url, visual_keywords
         FROM products
         WHERE is_active = 1 AND tenant_id = ?
         """,
@@ -195,7 +196,7 @@ def patch_product(product_id: int, tenant_id: int, fields: dict) -> dict:
     if "low_stock_threshold" in fields:
         sets.append("low_stock_threshold = ?")
         params.append(int(fields["low_stock_threshold"]))
-    for text_field in ("description", "ingredients", "allergens", "size_guide", "advisory_notes"):
+    for text_field in ("description", "ingredients", "allergens", "size_guide", "advisory_notes", "image_url", "visual_keywords"):
         if text_field in fields:
             sets.append(f"{text_field} = ?")
             params.append(fields[text_field])
@@ -236,6 +237,46 @@ def patch_product(product_id: int, tenant_id: int, fields: dict) -> dict:
     ).fetchone()
     conn.close()
     return {"basari": True, "urun": dict(updated)}
+
+
+def search_products_by_visual_description(
+    description: str,
+    tenant_id: int = 1,
+    category: str | None = None,
+    limit: int = 5,
+) -> list[dict]:
+    query = normalize_name(description)
+    q_tokens = set(query.split())
+    conn = get_connection()
+    sql = """
+        SELECT id, name, category, price, stock_quantity, low_stock_threshold,
+               description, image_url, visual_keywords, advisory_notes
+        FROM products
+        WHERE is_active = 1 AND tenant_id = ?
+    """
+    params: list = [tenant_id]
+    if category:
+        sql += " AND category = ?"
+        params.append(category)
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+
+    scored: list[tuple[float, dict]] = []
+    for row in rows:
+        item = dict(row)
+        haystack = " ".join(
+            str(item.get(k) or "")
+            for k in ("name", "category", "description", "visual_keywords", "advisory_notes")
+        )
+        h_tokens = set(normalize_name(haystack).split())
+        overlap = len(q_tokens & h_tokens)
+        seq = fuzzy_score(query, haystack)
+        score = overlap + seq
+        if score > 0.45:
+            item["visual_match_score"] = round(score, 3)
+            scored.append((score, item))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [item for _, item in scored[:limit]]
 
 
 def deactivate_product(product_id: int, tenant_id: int) -> dict:

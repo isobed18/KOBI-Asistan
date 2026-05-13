@@ -29,6 +29,8 @@ def init_db():
             allergens       TEXT,
             size_guide      TEXT,
             advisory_notes  TEXT,
+            image_url       TEXT,
+            visual_keywords TEXT,
             is_active       INTEGER NOT NULL DEFAULT 1,
             created_at      TEXT DEFAULT (datetime('now', 'localtime'))
         )
@@ -211,7 +213,7 @@ def init_db():
     for table in ("products", "orders", "tickets", "users", "stock_movements", "otp_challenges"):
         ensure_column(table, "tenant_id", "INTEGER NOT NULL DEFAULT 1")
 
-    for column in ("description", "ingredients", "allergens", "size_guide", "advisory_notes"):
+    for column in ("description", "ingredients", "allergens", "size_guide", "advisory_notes", "image_url", "visual_keywords"):
         ensure_column("products", column, "TEXT")
 
     # Demo video icin urun danismanligi metadatasi. Mevcut kayitlari ezmez.
@@ -242,9 +244,9 @@ def init_db():
         cursor.execute("""
             INSERT INTO products (
                 tenant_id, name, category, price, stock_quantity, low_stock_threshold,
-                description, size_guide, advisory_notes
+                description, size_guide, advisory_notes, image_url, visual_keywords
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             1,
             "Keten Gomlek",
@@ -255,6 +257,24 @@ def init_db():
             "Rahat kesim, yazlik keten gomlek.",
             "S: gogus 92-96 cm, omuz 40 cm. M: gogus 97-102 cm, omuz 42 cm. L: gogus 103-108 cm, omuz 44 cm. XL: gogus 109-116 cm, omuz 46 cm. Rahat durus icin gogus olcunuze 6-10 cm pay birakin.",
             "Keten kumas yikama sonrasi cok hafif cekme yapabilir; iki beden arasinda kalirsaniz daha rahat olan bedeni oneririz.",
+            "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600",
+            "beyaz keten gomlek yazlik rahat kesim erkek unisex minimal sade dugmeli uzun kollu",
+        ))
+    else:
+        cursor.execute("""
+            UPDATE products
+            SET image_url = COALESCE(image_url, ?),
+                visual_keywords = COALESCE(visual_keywords, ?),
+                description = COALESCE(description, ?),
+                size_guide = COALESCE(size_guide, ?),
+                advisory_notes = COALESCE(advisory_notes, ?)
+            WHERE tenant_id = 1 AND name = 'Keten Gomlek'
+        """, (
+            "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600",
+            "beyaz keten gomlek yazlik rahat kesim erkek unisex minimal sade dugmeli uzun kollu",
+            "Rahat kesim, yazlik keten gomlek.",
+            "S: gogus 92-96 cm, omuz 40 cm. M: gogus 97-102 cm, omuz 42 cm. L: gogus 103-108 cm, omuz 44 cm. XL: gogus 109-116 cm, omuz 46 cm. Rahat durus icin gogus olcunuze 6-10 cm pay birakin.",
+            "Keten kumas yikama sonrasi cok hafif cekme yapabilir; iki beden arasinda kalirsaniz daha rahat olan bedeni oneririz.",
         ))
     if not cursor.execute(
         "SELECT 1 FROM products WHERE tenant_id = 1 AND name = 'Oversize T-Shirt' LIMIT 1"
@@ -262,9 +282,9 @@ def init_db():
         cursor.execute("""
             INSERT INTO products (
                 tenant_id, name, category, price, stock_quantity, low_stock_threshold,
-                description, size_guide, advisory_notes
+                description, size_guide, advisory_notes, image_url, visual_keywords
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             1,
             "Oversize T-Shirt",
@@ -272,6 +292,24 @@ def init_db():
             420.0,
             30,
             8,
+            "Pamuklu, oversize kalip basic t-shirt.",
+            "XS/S: gogus 86-94 cm. M/L: gogus 95-106 cm. XL/XXL: gogus 107-120 cm. Oversize gorunum icin normal bedeninizi, daha sade durus icin bir kucuk araligi secin.",
+            "Gunluk kullanim icin uygundur; daha dar durus isteyen musterilere bir alt beden araligi onerilebilir.",
+            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600",
+            "siyah beyaz basic oversize tshirt pamuklu rahat sokak stili genis kalip",
+        ))
+    else:
+        cursor.execute("""
+            UPDATE products
+            SET image_url = COALESCE(image_url, ?),
+                visual_keywords = COALESCE(visual_keywords, ?),
+                description = COALESCE(description, ?),
+                size_guide = COALESCE(size_guide, ?),
+                advisory_notes = COALESCE(advisory_notes, ?)
+            WHERE tenant_id = 1 AND name = 'Oversize T-Shirt'
+        """, (
+            "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=600",
+            "siyah beyaz basic oversize tshirt pamuklu rahat sokak stili genis kalip",
             "Pamuklu, oversize kalip basic t-shirt.",
             "XS/S: gogus 86-94 cm. M/L: gogus 95-106 cm. XL/XXL: gogus 107-120 cm. Oversize gorunum icin normal bedeninizi, daha sade durus icin bir kucuk araligi secin.",
             "Gunluk kullanim icin uygundur; daha dar durus isteyen musterilere bir alt beden araligi onerilebilir.",
