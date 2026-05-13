@@ -18,6 +18,7 @@ from routers.reports import router as reports_router
 from routers.admin_chat import router as admin_chat_router
 from routers.auth_router import router as auth_router
 from routers.tenant_setup import router as tenant_setup_router
+from routers.visual_stock import router as visual_stock_router
 from integrations.telegram_bot import setup_telegram, stop_telegram
 from agent.scheduler import setup_scheduler, stop_scheduler
 from config import settings
@@ -67,6 +68,7 @@ app.include_router(reports_router)
 app.include_router(admin_chat_router)
 app.include_router(auth_router)
 app.include_router(tenant_setup_router)
+app.include_router(visual_stock_router)
 
 # Static files
 os.makedirs(os.path.join(os.path.dirname(__file__), "static"), exist_ok=True)

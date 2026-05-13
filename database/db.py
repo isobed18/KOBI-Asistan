@@ -204,6 +204,58 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS visual_stock_batches (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id       INTEGER NOT NULL,
+            business_type   TEXT,
+            status          TEXT NOT NULL DEFAULT 'pending_review',
+            source          TEXT NOT NULL DEFAULT 'admin_upload',
+            created_by      INTEGER,
+            created_at      TEXT DEFAULT (datetime('now', 'localtime')),
+            completed_at    TEXT
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS visual_stock_candidates (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id           INTEGER NOT NULL,
+            batch_id            INTEGER NOT NULL,
+            status              TEXT NOT NULL DEFAULT 'pending',
+            image_path          TEXT NOT NULL,
+            image_url           TEXT,
+            original_filename   TEXT,
+            suggested_name      TEXT,
+            suggested_category  TEXT,
+            suggested_price     REAL,
+            suggested_stock     INTEGER NOT NULL DEFAULT 1,
+            visual_keywords     TEXT,
+            description         TEXT,
+            classifier          TEXT,
+            confidence          REAL,
+            approved_product_id INTEGER,
+            created_at          TEXT DEFAULT (datetime('now', 'localtime')),
+            reviewed_at         TEXT,
+            FOREIGN KEY (batch_id) REFERENCES visual_stock_batches(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS product_image_embeddings (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id      INTEGER NOT NULL,
+            product_id     INTEGER,
+            candidate_id   INTEGER,
+            image_path     TEXT,
+            image_url      TEXT,
+            model_name     TEXT NOT NULL,
+            embedding_json TEXT,
+            keywords       TEXT,
+            created_at     TEXT DEFAULT (datetime('now', 'localtime'))
+        )
+    """)
+
     # Hafif migration: eski SQLite dosyalarinda yeni kolonlar eksikse ekle.
     def ensure_column(table: str, column: str, ddl: str):
         cols = [r["name"] for r in cursor.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -356,6 +408,14 @@ def init_db():
     ensure_index(
         "idx_stock_mov_tenant_created",
         "CREATE INDEX IF NOT EXISTS idx_stock_mov_tenant_created ON stock_movements(tenant_id, created_at)",
+    )
+    ensure_index(
+        "idx_visual_candidates_tenant_batch",
+        "CREATE INDEX IF NOT EXISTS idx_visual_candidates_tenant_batch ON visual_stock_candidates(tenant_id, batch_id, status)",
+    )
+    ensure_index(
+        "idx_image_embeddings_tenant_product",
+        "CREATE INDEX IF NOT EXISTS idx_image_embeddings_tenant_product ON product_image_embeddings(tenant_id, product_id)",
     )
 
     conn.commit()

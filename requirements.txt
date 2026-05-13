@@ -13,6 +13,7 @@ langchain-core>=0.3
 langchain-ollama>=0.3          # Ollama (local)
 langchain-google-genai>=2.0    # Google Gemini
 sentence-transformers>=3.0     # Optional local embeddings for intent similarity
+Pillow>=10.0                   # Optional image loading for CLIP visual ingestion
 
 # Scheduler
 apscheduler>=3.10
