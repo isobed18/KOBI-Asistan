@@ -10,6 +10,11 @@ class ProductBase(BaseModel):
     price: float
     stock_quantity: int
     low_stock_threshold: int = 10
+    description: Optional[str] = None
+    ingredients: Optional[str] = None
+    allergens: Optional[str] = None
+    size_guide: Optional[str] = None
+    advisory_notes: Optional[str] = None
 
 class ProductCreate(ProductBase):
     pass
@@ -32,6 +37,11 @@ class ProductPatch(BaseModel):
     price: Optional[float] = None
     stock_quantity: Optional[int] = None
     low_stock_threshold: Optional[int] = None
+    description: Optional[str] = None
+    ingredients: Optional[str] = None
+    allergens: Optional[str] = None
+    size_guide: Optional[str] = None
+    advisory_notes: Optional[str] = None
 
 #  SİPARİŞ 
 

@@ -155,6 +155,88 @@ def urun_stok_kontrol(urun_adi: str) -> dict:
 
 
 @tool
+def urun_danismani(
+    urun_adi: str,
+    soru: str,
+    musteri_olculeri: str = "",
+    alerjiler: str = "",
+    kullanim_amaci: str = "",
+) -> dict:
+    """Urun detaylarina gore musteriye yaratici ama guvenli danismanlik verir.
+
+    Beden/olcu, alerjen, icerik, kullanim amaci, hediye onerisi, kombin/eslesme
+    gibi klasik stok sorgusundan daha nitelikli sorularda kullan.
+
+    Ornekler:
+    - "Keten gomlek hangi bedeni bana olur? Gogsum 101 cm."
+    - "Cevize alerjim var, bu urun sorun olur mu?"
+    - "Bal polen hassasiyetinde uygun mu?"
+    """
+    matches = search_products(urun_adi, tenant_id=int(get_tenant_id() or 1), threshold=0.25, limit=5)
+    if not matches:
+        return {
+            "sonuc": "bulunamadi",
+            "mesaj": f"'{urun_adi}' icin urun bulunamadi.",
+        }
+
+    strong = [m for m in matches if m.get("match_score", 0) >= 0.78]
+    product = strong[0] if len(strong) == 1 else matches[0]
+    alternatives = [
+        {"id": m["id"], "ad": m["name"], "skor": m.get("match_score")}
+        for m in matches[1:4]
+    ]
+
+    metadata = {
+        "description": product.get("description"),
+        "ingredients": product.get("ingredients"),
+        "allergens": product.get("allergens"),
+        "size_guide": product.get("size_guide"),
+        "advisory_notes": product.get("advisory_notes"),
+    }
+    missing = [k for k, v in metadata.items() if not v]
+    q = f"{soru} {musteri_olculeri} {alerjiler} {kullanim_amaci}".lower()
+    is_allergy = any(w in q for w in ("alerji", "alerjen", "gluten", "laktoz", "fistik", "findik", "ceviz", "sut", "yumurta"))
+    is_size = any(w in q for w in ("beden", "olcu", "ölçü", "gogus", "bel", "omuz", "boy", "kilo", "size"))
+
+    guidance: list[str] = []
+    if is_size:
+        if product.get("size_guide"):
+            guidance.append("Beden cevabini size_guide alanina dayanarak ver; olcu eksikse net olcu iste.")
+        else:
+            guidance.append("Bu urun icin beden rehberi girilmemis; kesin beden soyleme, isletmeden beden tablosu istenmesini oner.")
+    if is_allergy:
+        if product.get("allergens") or product.get("ingredients"):
+            guidance.append("Alerjen cevabini ingredients/allergens alanina dayandir; kesin tibbi guvence verme.")
+        else:
+            guidance.append("Icerik/alerjen bilgisi yoksa urunu onermeden once isletmeden dogrulama iste.")
+    if not guidance:
+        guidance.append("Urun detaylarina gore kisa, yardimci ve satisa donuk bir danismanlik cevabi ver.")
+
+    return {
+        "sonuc": "bulundu",
+        "urun": {
+            "id": product["id"],
+            "ad": product["name"],
+            "kategori": product.get("category"),
+            "fiyat": product.get("price"),
+            "stok": product.get("stock_quantity"),
+            **metadata,
+        },
+        "musteri_sorusu": soru,
+        "musteri_olculeri": musteri_olculeri,
+        "musteri_alerjileri": alerjiler,
+        "kullanim_amaci": kullanim_amaci,
+        "alternatif_eslesmeler": alternatives,
+        "eksik_detaylar": missing,
+        "cevap_rehberi": guidance,
+        "guvenlik_notu": (
+            "Alerjen/uygunluk cevaplari tibbi tavsiye degildir. Risk varsa musteri doktora veya urun etiketine yonlendirilmeli."
+            if is_allergy else None
+        ),
+    }
+
+
+@tool
 def siparis_iptal_otp_gonder(siparis_no: int) -> dict:
     """Siparis iptali gibi kritik aksiyonlar icin OTP baslatir.
 

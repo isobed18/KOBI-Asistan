@@ -90,7 +90,8 @@ def search_products(query: str, tenant_id: int = 1, threshold: float = 0.38, lim
     conn = get_connection()
     rows = conn.execute(
         """
-        SELECT id, name, category, price, stock_quantity, low_stock_threshold
+        SELECT id, name, category, price, stock_quantity, low_stock_threshold,
+               description, ingredients, allergens, size_guide, advisory_notes
         FROM products
         WHERE is_active = 1 AND tenant_id = ?
         """,
@@ -194,6 +195,10 @@ def patch_product(product_id: int, tenant_id: int, fields: dict) -> dict:
     if "low_stock_threshold" in fields:
         sets.append("low_stock_threshold = ?")
         params.append(int(fields["low_stock_threshold"]))
+    for text_field in ("description", "ingredients", "allergens", "size_guide", "advisory_notes"):
+        if text_field in fields:
+            sets.append(f"{text_field} = ?")
+            params.append(fields[text_field])
 
     if not sets:
         conn.close()

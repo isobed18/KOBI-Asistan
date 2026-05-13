@@ -24,6 +24,11 @@ def init_db():
             price           REAL NOT NULL,
             stock_quantity  INTEGER NOT NULL DEFAULT 0,
             low_stock_threshold INTEGER NOT NULL DEFAULT 10,
+            description     TEXT,
+            ingredients     TEXT,
+            allergens       TEXT,
+            size_guide      TEXT,
+            advisory_notes  TEXT,
             is_active       INTEGER NOT NULL DEFAULT 1,
             created_at      TEXT DEFAULT (datetime('now', 'localtime'))
         )
@@ -205,6 +210,72 @@ def init_db():
 
     for table in ("products", "orders", "tickets", "users", "stock_movements", "otp_challenges"):
         ensure_column(table, "tenant_id", "INTEGER NOT NULL DEFAULT 1")
+
+    for column in ("description", "ingredients", "allergens", "size_guide", "advisory_notes"):
+        ensure_column("products", column, "TEXT")
+
+    # Demo video icin urun danismanligi metadatasi. Mevcut kayitlari ezmez.
+    cursor.execute("""
+        UPDATE products
+        SET ingredients = COALESCE(ingredients, 'Ceviz ici. Katki maddesi icermez.'),
+            allergens = COALESCE(allergens, 'Ceviz/agac yemisi. Ayni hatta fistik, findik ve badem islenebilir.'),
+            advisory_notes = COALESCE(advisory_notes, 'Tatli, kahvalti ve salatalarda kullanima uygundur. Serin ve kuru yerde saklayin.')
+        WHERE lower(name) LIKE '%ceviz%' AND tenant_id = 1
+    """)
+    cursor.execute("""
+        UPDATE products
+        SET ingredients = COALESCE(ingredients, 'Cicek bali. Ilave seker icermez.'),
+            allergens = COALESCE(allergens, 'Bal; 1 yas alti bebekler icin uygun degildir. Polen hassasiyeti olanlar dikkatli olmalidir.'),
+            advisory_notes = COALESCE(advisory_notes, 'Kahvalti, yogurt ve bitki cayi ile onerilir. Kristallesme dogaldir.')
+        WHERE lower(name) LIKE '%bali%' AND tenant_id = 1
+    """)
+    cursor.execute("""
+        UPDATE products
+        SET ingredients = COALESCE(ingredients, 'Sizma zeytinyagi.'),
+            allergens = COALESCE(allergens, 'Bilinen majör alerjen icermez; capraz bulasma bilgisi isletme tarafindan dogrulanmalidir.'),
+            advisory_notes = COALESCE(advisory_notes, 'Salata, soguk meze ve dusuk/orta isida pisirme icin uygundur.')
+        WHERE lower(name) LIKE '%zeytinyagi%' AND tenant_id = 1
+    """)
+    if not cursor.execute(
+        "SELECT 1 FROM products WHERE tenant_id = 1 AND name = 'Keten Gomlek' LIMIT 1"
+    ).fetchone():
+        cursor.execute("""
+            INSERT INTO products (
+                tenant_id, name, category, price, stock_quantity, low_stock_threshold,
+                description, size_guide, advisory_notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            1,
+            "Keten Gomlek",
+            "Giyim",
+            890.0,
+            18,
+            5,
+            "Rahat kesim, yazlik keten gomlek.",
+            "S: gogus 92-96 cm, omuz 40 cm. M: gogus 97-102 cm, omuz 42 cm. L: gogus 103-108 cm, omuz 44 cm. XL: gogus 109-116 cm, omuz 46 cm. Rahat durus icin gogus olcunuze 6-10 cm pay birakin.",
+            "Keten kumas yikama sonrasi cok hafif cekme yapabilir; iki beden arasinda kalirsaniz daha rahat olan bedeni oneririz.",
+        ))
+    if not cursor.execute(
+        "SELECT 1 FROM products WHERE tenant_id = 1 AND name = 'Oversize T-Shirt' LIMIT 1"
+    ).fetchone():
+        cursor.execute("""
+            INSERT INTO products (
+                tenant_id, name, category, price, stock_quantity, low_stock_threshold,
+                description, size_guide, advisory_notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            1,
+            "Oversize T-Shirt",
+            "Giyim",
+            420.0,
+            30,
+            8,
+            "Pamuklu, oversize kalip basic t-shirt.",
+            "XS/S: gogus 86-94 cm. M/L: gogus 95-106 cm. XL/XXL: gogus 107-120 cm. Oversize gorunum icin normal bedeninizi, daha sade durus icin bir kucuk araligi secin.",
+            "Gunluk kullanim icin uygundur; daha dar durus isteyen musterilere bir alt beden araligi onerilebilir.",
+        ))
 
     # Eski daily_reports şeması (tenant yok): kolon migrasyonu
     dr_cols = [r["name"] for r in cursor.execute("PRAGMA table_info(daily_reports)").fetchall()]

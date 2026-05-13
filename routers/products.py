@@ -76,9 +76,15 @@ def create_product(body: ProductCreate):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO products (tenant_id, name, category, price, stock_quantity, low_stock_threshold)
-        VALUES (?,?,?,?,?,?)
-    """, (get_tenant_id(), body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold))
+        INSERT INTO products (
+            tenant_id, name, category, price, stock_quantity, low_stock_threshold,
+            description, ingredients, allergens, size_guide, advisory_notes
+        )
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    """, (
+        get_tenant_id(), body.name, body.category, body.price, body.stock_quantity, body.low_stock_threshold,
+        body.description, body.ingredients, body.allergens, body.size_guide, body.advisory_notes,
+    ))
     product_id = cursor.lastrowid
     conn.commit()
     conn.close()
